@@ -535,7 +535,7 @@ def test_pre_trained_MPC_agent():
             if update_vision:
                 print("Update time!")
                 # Generate circogram
-                N = 4 # 36
+                N = 40 # 36
                 horizon = 1000
                 real_circogram = car1.static_circogram_2(N, objects, horizon)
                 d1, d2, _, P2, _ = real_circogram
