@@ -15,7 +15,7 @@ def test_numerical_stability():
     # PARAMETERS:
     """   
     #sim_dt=0.25
-    sim_dt = 0.05
+    sim_dt = 0.5
     #sim_dt = 0.0333333333333333333333333333 #(1/30)
     decision_dt = 0.5
     env="v21"
@@ -1042,7 +1042,7 @@ if __name__ == "__main__":
         - The model might not be numerically stable; as we get different results for running one step of 0.5, or 10 steps of 0.05 seconds...
         - if sim_dt == decision_dt, we are good!
     """
-    test_pre_trained_MPC_agent() # # vbox does not update
+    #test_pre_trained_MPC_agent() # # vbox does not update
     #test_pre_trained_with_update_vbox() 
     while True:
         test_milkman_full() # Buggy as hell currently...
