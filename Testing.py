@@ -1031,6 +1031,211 @@ def test_milkman_full():
 
         else:
             exit()
+
+def test_milkman_smart_SC_update():
+    """
+    # PARAMETERS:
+    """   
+    #sim_dt=0.25
+    #sim_dt = 0.0333333333333333333333333333
+    sim_dt = 0.1
+    decision_dt = sim_dt
+    SC_dt = 0.5
+    env="v21"
+    folder="DDPG/checkpoints/v21_2"
+    v_max=20
+    v_min=-4
+    alpha_max=0.5
+    tau_steering=0.5
+    tau_throttle=0.5
+     
+    # Start a new agent
+    agent = DDPG_Agent(alpha=0.000025, beta=0.00025, input_dims=[40], tau=0.1, env=env, 
+                batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=folder)
+    # Load the pre-trained model
+    agent.load_models(Verbose=False)
+
+    # Graphics
+    MAP_DIMENSIONS = (1080, 1920)
+    gfx = Visualization(MAP_DIMENSIONS, pixels_per_unit=7, map_img_path="graphics/test_map_2.png")
+    # Environment
+    env = ClosedField_v21(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200)
+    env.reset()
+    # vehicle
+    car1 = env.vehicle
+    objects = env.objects
+    goal_x, goal_y = env.goal_x, env.goal_y
+
+    # Sets certain parameters
+    collision = False
+    trajectory_length = np.int(3.0/sim_dt) # Will give a 3second trajectory
+    clock = pygame.time.Clock()
+    fps = 1/sim_dt
+    update_vision=True # need to make initial update
+    time_counter = 0
+    while not collision:
+        # Default steering parameters
+        # Runs every decision_dt = sim_dt
+        alpha_ref = 0
+        v_ref = 0 
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: # Press x button
+                pygame.quit()
+                sys.exit()
+
+        ###########################
+        # Vision box & Trajectory #
+        ###########################
+        time_counter += decision_dt
+        # Retrieve corresponding SC from trajectory
+        try:
+            d2_halu = halu_d2s.popleft()
+            first_time = False
+        except UnboundLocalError:
+            first_time = True
+        ##############################################
+        # Only check for updates every timer_counter #
+        ##############################################
+        time_counter += decision_dt
+        #
+        if first_time or (len(action_queue)) <= 1:
+                time_counter = 0 # Reset
+                N = 36
+                horizon = 1000
+                real_circogram = car1.static_circogram_2(N, objects, horizon)
+                d1, d2, _, P2, _ = real_circogram
+                collision = car1.collision_check(d1, d2)
+                update_vision = True
+        elif time_counter >= SC_dt:
+            ####################################
+            # Do we need to update trajectory? #
+            ####################################
+            time_counter = 0 # Reset
+            N = 36
+            horizon = 1000
+            real_circogram = car1.static_circogram_2(N, objects, horizon)
+            d1, d2, _, P2, _ = real_circogram
+            collision = car1.collision_check(d1, d2)
+            if collision:
+                print("Collision!")
+                continue
+            else:
+                # 1 Outside is drastically different
+                diff = d2_halu - d2*0.50
+                value = np.sum(diff < 0)
+                if value:
+                    #print("Outside is different!")
+                    update_vision = True
+                # 2 Outside gotten inside
+                diff = d2-(d2_halu*0.75) # Adding a bit of wiggle room
+                value = np.sum(diff < 0) # if only one ray is "true" in the comparison
+                if value:
+                    #print("Outside is INSIDE!")
+                    update_vision = True
+            if update_vision:
+                print("need to update...")
+            else:
+                print("no need to update, all good!")
+        
+        
+        ###############################################
+        # Ok, we need to update vision and trajectory #
+        ###############################################
+        if update_vision:
+            #print("Update time!")
+            viz_box = Object(np.array([0, 0]), vertices=P2)
+            update_vision = False
+
+            # Generate the trajectory to follow
+            halu_car = deepcopy(car1)
+            trajectory = deque()
+            action_queue = deque()
+            halu_d2s = deque()
+            for _ in range(trajectory_length):
+                # Need to multiply by actual direction, as if not - it will always be a positive value.
+                try:
+                    normed_velocity = np.linalg.norm(halu_car.X[2:])*halu_car.actual_direction
+                except:
+                    normed_velocity = 0
+                steering_angle = halu_car.alpha
+
+                # Update goal poses in CCF (as CCF's origin has moved)
+                goal_CCF = halu_car.WCFtoCCF(np.array([goal_x, goal_y]))
+
+                # Get the "new" static circogram
+                N = 36
+                horizon = 1000
+                SC = halu_car.static_circogram_2(N, [viz_box], horizon)
+                d1_, d2_, _, _, _ = SC
+                real_distances = d2_ - d1_
+                halu_d2s.append(d2_)
+                # Generate new state
+                state = np.array([goal_CCF[0], goal_CCF[1], normed_velocity, steering_angle,
+                    real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
+                    real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
+                    real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
+                    real_distances[18], real_distances[19], real_distances[20], real_distances[21], real_distances[22], real_distances[23],
+                    real_distances[24], real_distances[25], real_distances[26], real_distances[27], real_distances[28], real_distances[29],
+                    real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
+                    ],
+                    dtype=np.float32)
+
+                act = agent.choose_action(state)
+                # Translate action signals to steering signals
+                throttle_signal = act[0]
+                if throttle_signal >= 0:
+                    v_ref_t = v_max*throttle_signal
+                else:
+                    v_ref_t = -v_min*throttle_signal
+                steering_signal = act[1]
+                alpha_ref_t = alpha_max*steering_signal
+
+                # Run one cycle
+                halu_car.one_step_algorithm_2(alpha_ref=alpha_ref_t, v_ref=v_ref_t, dt=decision_dt)
+                trajectory.append(halu_car.position_center)
+                action_queue.append([v_ref_t, alpha_ref_t])
+
+        #################################
+        # Select the action, from queue #
+        #################################
+        v_ref, alpha_ref = action_queue.popleft()
+        trajectory.popleft() # Also remove a point of the trajectory, for visuals.
+        ##############
+        # Visualize! #
+        ##############
+
+        gfx.clear_canvas()
+        gfx.draw_all_objects([car1]+objects) # +objects
+        gfx.draw_one_object(viz_box, color=(255, 0, 0), width=4)
+
+        gfx.draw_headings([car1], scale=True)
+        gfx.draw_goal_state((goal_x, goal_y), threshold=10)
+        for point in trajectory:
+            gfx.draw_goal_state((point[0], point[1]), width=2)
+
+        #gfx.draw_centers(cars)
+        #gfx.draw_static_circogram_data(real_circogram, car1, color=(0, 0, 255))
+        #gfx.draw_static_circogram_data(halucinated_circogram, car1, color=(0, 255, 0))
+        clock.tick(fps) # fps
+        gfx.display_fps(clock.get_fps(), font_size=32, color="red", where=(0,0))
+        gfx.update_display()
+
+        # Run x number of simulation cycles.
+        car1.one_step_algorithm_2(alpha_ref=alpha_ref, v_ref=v_ref, dt=sim_dt)
+
+        #################
+        # Goal reached? #
+        #################
+        # Calculate goal distance
+        carx, cary = car1.position_center
+        dist = np.linalg.norm(np.array([carx, cary]) - np.array([goal_x, goal_y]))
+        # Goal is reached!
+        if dist < 10:
+            #env.generate_new_goal_state()
+            #goal_x, goal_y = env.goal_x, env.goal_y
+            return
+
     
 
 if __name__ == "__main__":
@@ -1042,9 +1247,9 @@ if __name__ == "__main__":
         - The model might not be numerically stable; as we get different results for running one step of 0.5, or 10 steps of 0.05 seconds...
         - if sim_dt == decision_dt, we are good!
     """
-    test_pre_trained_MPC_agent() # # vbox does not update
+    #test_pre_trained_MPC_agent() # # vbox does not update
     #test_pre_trained_with_update_vbox() 
     while True:
-        test_milkman_full() # Buggy as hell currently...
-    
+        #test_milkman_full() 
+        test_milkman_smart_SC_update()
     #test_numerical_stability()
