@@ -15,7 +15,7 @@ def test_numerical_stability():
     # PARAMETERS:
     """   
     #sim_dt=0.25
-    sim_dt = 0.05
+    sim_dt = 0.5
     #sim_dt = 0.0333333333333333333333333333 #(1/30)
     decision_dt = 0.5
     env="v21"
