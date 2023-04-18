@@ -1394,10 +1394,7 @@ def test_milkman_smarter_SC_update():
             # Select the action, from queue #
             #################################
             v_ref, alpha_ref = action_queue.popleft()
-            #
-            decision_trajectory.popleft() # Also remove a point of the trajectory, for visuals.
-            for _ in range(times):
-                sim_trajectory.popleft() # remove '#Times' amount of simulated steps
+
             ##############
             # Visualize! #
             ##############
@@ -1414,6 +1411,7 @@ def test_milkman_smarter_SC_update():
                     for sim_point in sim_trajectory:
                         gfx.draw_goal_state((sim_point[0], sim_point[1]), width=1)
                     gfx.draw_goal_state((point[0], point[1]), width=3)
+                    
                         
 
                 #gfx.draw_centers(cars)
@@ -1425,6 +1423,10 @@ def test_milkman_smarter_SC_update():
 
                 # Run x number of simulation cycles.
                 car1.one_step_algorithm_2(alpha_ref=alpha_ref, v_ref=v_ref, dt=sim_dt)
+                # Book-keeping
+                sim_trajectory.popleft() # remove '#Times' amount of simulated steps
+            # Book-keeping
+            decision_trajectory.popleft() # Remove a point of the trajectory, for visuals.
 
             #################
             # Goal reached? #
