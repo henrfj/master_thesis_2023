@@ -352,7 +352,7 @@ def milk_man_challenge_v2(repeat=False, sim_dt=0.1,decision_dt=0.1, render_all_f
 
 ############################################################## NEW technology! ##############################################################
 
-def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
+def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5):
     """
         - loadfolder="DDPG/checkpoints/v22_5"; holds a good starting point, based on a basic DDPG algorithm
@@ -416,6 +416,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             ########################
             obs = new_state
             env.render(decision_trajectory, sim_trajectory)
+            # TODO: remove visited points of the trajectory, as we go...
 
 
 if __name__ == "__main__":
@@ -436,5 +437,5 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
 
     # MPC!
-    visualize_v40(repeat=True, sim_dt=0.05, decision_dt=0.5, render_all_frames=True, env_selected="v21", folder="DDPG/checkpoints/v21_2",
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_mid_training",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)

@@ -121,7 +121,8 @@ class CriticNetwork(nn.Module):
         if Verbose:
             print('... loading checkpoint ...')
         if load_directory:
-            self.load_state_dict(T.load(load_directory))
+            full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
+            self.load_state_dict(T.load(full_load_directory))
         else:
             self.load_state_dict(T.load(self.checkpoint_file))
 
@@ -188,7 +189,8 @@ class ActorNetwork(nn.Module):
         if Verbose:
             print('... loading checkpoint ...')
         if load_directory:
-            self.load_state_dict(T.load(load_directory))
+            full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
+            self.load_state_dict(T.load(full_load_directory))
         else:
             self.load_state_dict(T.load(self.checkpoint_file))
 

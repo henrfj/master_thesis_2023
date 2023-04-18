@@ -1435,10 +1435,7 @@ class MPC_environment_v40(gym.Env): #
 		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
 
 	def generate_new_goal_state(self):
-		prev_selection = self.selection
-		selection = -1
-		while selection == prev_selection:
-			selection = np.random.randint(0, 4) # [low, high)
+		selection = np.random.randint(0, 4) # [low, high)
 		if selection == 0: # WEST
 			goal = np.array([25, 75])
 		elif selection == 1: # NORTH
@@ -1495,10 +1492,10 @@ class MPC_environment_v40(gym.Env): #
 		self.SC = self.vehicle.static_circogram_2(N=36, list_objects_simul=self.objects, d_horizon=self.horizon)
 		d1, d2, _, P2, _  = self.SC
 		real_distances = d2 - d1
-		previous_steering_signal = 0
-		previous_throttle_signal = 0
+		self.previous_steering_signal = 0
+		self.previous_throttle_signal = 0
 		# Generate new state
-		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_vel, steering_angle, previous_steering_signal, previous_throttle_signal,
+		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_vel, steering_angle, self.previous_steering_signal, self.previous_throttle_signal,
 			real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
 			real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
 			real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
@@ -1551,6 +1548,9 @@ class MPC_environment_v40(gym.Env): #
 		action_queue = deque()
 		halu_d2s = deque()
 		states = []
+		#
+		previous_throttle_signal = self.previous_throttle_signal
+		previous_steering_signal = self.previous_steering_signal
 		for _ in range(trajectory_length):
 			# Need to multiply by actual direction, as if not - it will always be a positive value.
 			try:
@@ -1570,7 +1570,7 @@ class MPC_environment_v40(gym.Env): #
 			real_distances = d2_ - d1_
 			halu_d2s.append(d2_)
 			# Generate new state
-			state = np.array([goal_CCF[0], goal_CCF[1], normed_velocity, steering_angle, self.previous_throttle, self.previous_steering,
+			state = np.array([goal_CCF[0], goal_CCF[1], normed_velocity, steering_angle, previous_throttle_signal, previous_steering_signal,
 				real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
 				real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
 				real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
@@ -1583,13 +1583,15 @@ class MPC_environment_v40(gym.Env): #
 			# This state is in collision :(
 			collided = halu_car.collision_check(d1_, d2_)
 			if collided:
-				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, collided
+				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 			############################
 			states.append(state)
 			# Choose **one** decision
 			act = agent.choose_action(state)
 			action_queue.append(act)
-
+			#
+			previous_throttle_signal = act[0]
+			previous_steering_signal = act[1]
 			# Translate action signals to steering signals
 			throttle_signal = act[0]
 			if throttle_signal >= 0:
@@ -1656,7 +1658,7 @@ class MPC_environment_v40(gym.Env): #
 		real_distances = d2 - d1
 
 		# Generate new state
-		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_velocity, steering_angle, self.previous_throttle, self.previous_steering, 
+		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_velocity, steering_angle, self.previous_throttle_signal, self.previous_steering_signal, 
 			real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
 			real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
 			real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
@@ -1699,10 +1701,10 @@ class MPC_environment_v40(gym.Env): #
 		self.time_step += 1
 
 		# Punish jerk: [-2, 2]
-		reward -= np.abs(action[0] - self.previous_throttle)
-		reward -= np.abs(action[1] - self.previous_steering)
-		self.previous_throttle = action[0]
-		self.previous_steering = action[1]
+		reward -= np.abs(action[0] - self.previous_throttle_signal)
+		reward -= np.abs(action[1] - self.previous_steering_signal)
+		self.previous_throttle_signal = action[0]
+		self.previous_steering_signal = action[1]
 		return new_state, reward, done, info
 
 	def render(self, decision_trajectory, sim_trajectory, mode='human',):
