@@ -257,11 +257,9 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
     plotLearning(score_history, filename, window=100)
 
 
-def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5"):
+def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5"):
     ###############################################################################################################
     # Parameters
-    sim_dt = 0.05
-    decision_dt = 0.5
     times = np.int32(decision_dt/sim_dt)
     v_max=20
     v_min=-4
@@ -269,7 +267,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDP
     tau_steering=0.5
     tau_throttle=0.5
     # Initialization
-    env = MPC_environment_v40(sim_dt=0.1, decision_dt=0.5, render=False, v_max=v_max, v_min=v_min,
+    env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=v_max, v_min=v_min,
 	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
 		   episode_s=60, mpc=True)
     env.reset()
@@ -277,16 +275,15 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDP
             batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
     
     if loadfolder:
-        # TODO: specify where to load models from!
+        print("Loading model from:'" + loadfolder+"'")
         agent.load_models(load_directory=loadfolder)
     np.random.seed(0)
     ###############################################################################################################
     # Sets certain parameters
-    collision = False
     trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
-    update_vision=True # need to make initial update
+    # Book-keeping during training
     score_history = []
-
+    actual_collisions_during_training = 0
     ###############################################################################################################
     """ One episode"""
     for i in range(episodes):
@@ -294,17 +291,15 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDP
         done = False
         score = 0
         episode_lenght = 0
-        update_vision = True
+        update_vision=True # need to make initial update
+        rejected_trajectories = 0
         """ One decision_dt """
         while not done:
             ##############
             # Get new SC #
             ##############
-            N = 36
-            horizon = 1000
-            real_circogram = env.vehicle.static_circogram_2(N, env.objects, horizon)
+            real_circogram = env.SC
             d1, d2, _, P2, _ = real_circogram
-            #collision = env.vehicle.collision_check(d1, d2)
 
             # Do not allow colliding trajectories
             while update_vision: 
@@ -314,12 +309,15 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDP
                     
                     # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
                     if collided: # need to learn from that experience
+                        rejected_trajectories += 1
                         # 1 Add all halucinated knowledge to memory
+                        disc = 0
                         for i in range(len(states)-1, 0, -1):
                             next_state = states[i]
                             current_state = states[i-1]
                             action = action_queue.pop()
-                            R = -40 * agent.gamma**i # Discounted collision reward
+                            R = -40 * agent.gamma**disc # Discounted collision reward
+                            disc += 1 # Discount growing back in time.
                             # Only the last state is the "done" staet, where collision happend
                             if i==len(states)-1:
                                 done = True
@@ -343,6 +341,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDP
             # Select and execute action #
             #############################
             act = action_queue.popleft()
+            """ NOTE during env.step, the SC for the new step is calculated! """
             new_state, reward, done, info = env.step(act)
             # Remember the transition
             agent.remember(obs, act, reward, new_state, int(done))
@@ -357,19 +356,24 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDP
             #env.render()
             episode_lenght += 1
 
+        ####################################
+        ## BOOK-Keeping from the training ##
+        ####################################
         score_history.append(score)
-        
+        if info == "'Collided'":
+            actual_collisions_during_training +=1
         # Store best average models
         avg_score = np.mean(score_history[-100:])
         if avg_score > best_score:
             best_score = avg_score
             agent.save_models()
-
         print('episode ', i, 'score %.2f' % score,
             'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
+        print("Rejected trajectories:", rejected_trajectories)
+        ####################################
 
     plotLearning(score_history, plotting, window=100)
-
+    print("Actual collisions during training:", actual_collisions_during_training)
 
 if __name__ =="__main__":
     # IN WCF
@@ -381,6 +385,6 @@ if __name__ =="__main__":
     #v20_training(episodes=10000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v20_2", filename = 'DDPG/plots/openfield_v20_2.png')
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
     # JERK ADDED
-    v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png') # Added jerk control
+    #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png')
     # MPC
-    #v40_MPC_training()
+    v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22")

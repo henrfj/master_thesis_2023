@@ -11,7 +11,7 @@ from copy import deepcopy
 #import a_star_utils as autils
 import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
-sys.path.insert(1, 'C:/Users/henri/Desktop/Simple_simulator')
+sys.path.insert(1, 'C:/Users/henri/Desktop/MASTER_THESIS_2023')
 from Vehicle import Vehicle
 from Agent import Agent
 from limo import Limo
@@ -1426,7 +1426,9 @@ class MPC_environment_v40(gym.Env): #
 		self.will_render=render
 		if self.will_render: # For displaying
 			MAP_DIMENSIONS = (1080, 1920)
-			self.gfx = Visualization(MAP_DIMENSIONS, pixels_per_unit=7) # Also initializes the display
+			self.gfx = Visualization(MAP_DIMENSIONS, pixels_per_unit=7, map_img_path="graphics/test_map_2.png") # Also initializes the display
+			self.clock = pygame.time.Clock()
+			self.fps = 1/sim_dt
 		self.objects = []
 
 	def add_objects(self, vertices):
@@ -1626,7 +1628,7 @@ class MPC_environment_v40(gym.Env): #
 		# Call upon the vehicle step action
 		times = np.int32(self.decision_dt/self.sim_dt)
 		if self.will_render:
-			self.sim_trajectory = []
+			self.real_trajectory = []
 		# NOTE this avoids numerical instability, by using sim_dt to simulate actions taken each decicion_dt
 		for _ in range(times):
 			self.vehicle.one_step_algorithm_2(alpha_ref, v_ref, dt=self.sim_dt)
@@ -1634,7 +1636,7 @@ class MPC_environment_v40(gym.Env): #
 			if self.will_render:
 				xpos, ypos = self.vehicle.position_center
 				heading = self.vehicle.heading
-				self.sim_trajectory.append([xpos, ypos, heading])
+				self.real_trajectory.append([xpos, ypos, heading])
 		
 		# After running n simulations steps:
 		xpos, ypos = self.vehicle.position_center
@@ -1703,54 +1705,56 @@ class MPC_environment_v40(gym.Env): #
 		self.previous_steering = action[1]
 		return new_state, reward, done, info
 
-	def render(self, mode='human', close=False, render_all_frames=False, show_SC=False):
-		if render_all_frames:
-			for _, frame in enumerate(self.sim_trajectory):
-				self.render_one_frame(frame, show_SC=show_SC)
-		else:
-			self.render_one_frame(np.array([self.vehicle.X[0], self.vehicle.X[1], self.vehicle.heading]), show_SC=show_SC)
+	def render(self, decision_trajectory, sim_trajectory, mode='human',):
+		
+		for _, state in enumerate(self.real_trajectory):
 
-	def render_one_frame(self, state, show_SC=False):
-		##################
-		self.gfx.clear_canvas()
-    	##################
-		# Extract geometry
-		length=self.vehicle.length
-		width=self.vehicle.width
-		center_pos = state[0:2]
-		heading = state[2]
+			##################
+			self.gfx.clear_canvas()
+			##################
+			# Extract geometry
+			length=self.vehicle.length
+			width=self.vehicle.width
+			center_pos = state[0:2]
+			heading = state[2]
 
-		# Vertices:
-		verticesCCF = [np.array([width/2,  length/2 ]),
-						np.array([-width/2, length/2 ]),
-						np.array([-width/2, -length/2]),
-						np.array([width/2,  -length/2])]
+			# Vertices:
+			verticesCCF = [np.array([width/2,  length/2 ]),
+							np.array([-width/2, length/2 ]),
+							np.array([-width/2, -length/2]),
+							np.array([width/2,  -length/2])]
 
-		angle = heading-np.pi/2
-		R_W_V = np.array([[np.cos(angle), -np.sin(angle)],
-							[np.sin(angle), np.cos(angle)]])
+			angle = heading-np.pi/2
+			R_W_V = np.array([[np.cos(angle), -np.sin(angle)],
+								[np.sin(angle), np.cos(angle)]])
 
-		verticesWCF = []
-		for vertex in verticesCCF:
-			verticesWCF.append(R_W_V@vertex + np.asarray(center_pos))
-		# Sides
-		sides = [[verticesWCF[-1], verticesWCF[0]]]
-		for i in range(len(verticesWCF)-1):
-			sides.append([verticesWCF[i], verticesWCF[i+1]])
+			verticesWCF = []
+			for vertex in verticesCCF:
+				verticesWCF.append(R_W_V@vertex + np.asarray(center_pos))
+			# Sides
+			sides = [[verticesWCF[-1], verticesWCF[0]]]
+			for i in range(len(verticesWCF)-1):
+				sides.append([verticesWCF[i], verticesWCF[i+1]])
 
-		self.gfx.draw_sides(sides)
-		# Draw heading and center of vehicle
-		self.gfx.draw_center_and_headings_simple(heading, center_pos)
+			self.gfx.draw_sides(sides)
+			# Draw heading and center of vehicle
+			self.gfx.draw_center_and_headings_simple(heading, center_pos)
 
-		# Draw the goal and goal limit
-		self.gfx.draw_goal_state(np.array([self.goal_x, self.goal_y]), threshold=self.goal_threshold)
+			# Draw the goal and goal limit
+			self.gfx.draw_goal_state(np.array([self.goal_x, self.goal_y]), threshold=self.goal_threshold)
 
-		# Draw all static obstacles
-		for obj in self.objects:
-			self.gfx.draw_sides(obj.sides)
+			# Draw all static obstacles
+			for obj in self.objects:
+				self.gfx.draw_sides(obj.sides)
 
-		if show_SC:
-			self.gfx.draw_static_circogram_data(self, self.SC, self.vehicle)
-		##################
-		self.gfx.update_display()
-		##################
+			# Draw all remaining points in trajectory
+			for point in decision_trajectory:
+				# Draw the simulates steps in between!
+				for sim_point in sim_trajectory:
+					self.gfx.draw_goal_state((sim_point[0], sim_point[1]), width=1)
+				self.gfx.draw_goal_state((point[0], point[1]), width=3)
+				
+			self.clock.tick(self.fps) # fps
+			self.gfx.display_fps(self.clock.get_fps(), font_size=32, color="red", where=(0,0))
+			self.gfx.update_display()
+

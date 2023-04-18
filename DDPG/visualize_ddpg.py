@@ -1,8 +1,10 @@
-from ddpg_torch import Agent
+from ddpg_torch import MPC_Agent, Agent
 import gym
 import numpy as np
-from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, aStar_v30
+from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, MPC_environment_v40
 import pygame
+import sys
+
 
 def visualize_v00(repeat=False, sim_dt=0.1,decision_dt=0.1, render_all_frames=True, folder="DDPG/checkpoints/v00"):
     # Start a new environment
@@ -348,6 +350,73 @@ def milk_man_challenge_v2(repeat=False, sim_dt=0.1,decision_dt=0.1, render_all_f
             return
         #env.close() # Automatically when env is garbage-collected.
 
+############################################################## NEW technology! ##############################################################
+
+def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5):
+    """
+        - loadfolder="DDPG/checkpoints/v22_5"; holds a good starting point, based on a basic DDPG algorithm
+        - loadfolder="DDPG/checkpoints/v40"; is a MPC-specifically trained agent to be visualized
+
+    """
+    
+    # Initialization
+    env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=True, v_max=v_max, v_min=v_min,
+	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
+		   episode_s=60, mpc=True)
+    env.reset()
+    agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
+            batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
+    
+    if loadfolder:
+        print("Loading model from:'" + loadfolder+"'")
+        agent.load_models(load_directory=loadfolder)
+    np.random.seed(0)
+    ###############################################################################################################
+    # Sets certain parameters
+    trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
+    ###############################################################################################################
+    """ One episode"""
+    while True: # Keeps repeating until exited
+        obs = env.reset()
+        done = False
+        update_vision=True # need to make initial update
+        """ One decision_dt """
+        while not done:
+            ##############
+            # Get new SC #
+            ##############
+            real_circogram = env.SC
+            d1, d2, _, P2, _ = real_circogram
+            #
+            if update_vision:
+                action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, _ = \
+                    env.hallucinate(P2, trajectory_length, sim_dt, decision_dt, agent)
+                
+                    
+            ####################################
+            # Do we need to update trajectory? #
+            ####################################
+            d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
+            update_vision = env.update_vision(len(action_queue), d2, d2_halu)
+
+            #############################
+            # Select and execute action #
+            #############################
+            act = action_queue.popleft()
+            """ NOTE during env.step, the SC for the new step is calculated! """
+            new_state, reward, done, info = env.step(act)
+            # Remember the transition
+            agent.remember(obs, act, reward, new_state, int(done))
+            # Learn from replay buffer, given batch size
+            agent.learn()
+            
+            ########################
+            # End of state actions #
+            ########################
+            obs = new_state
+            env.render(decision_trajectory, sim_trajectory)
+
 
 if __name__ == "__main__":
     #################### WCF
@@ -363,6 +432,9 @@ if __name__ == "__main__":
     #              v_max=25, v_min=-12, alpha_max=0.3, tau_steering=0.7, tau_throttle=0.7)
     #milk_man_challenge_v1(repeat=True, sim_dt=0.05, decision_dt=0.1, render_all_frames=True, env_selected="v20", folder="DDPG/checkpoints/v20_2",
     #                      v_max=25, v_min=-12, alpha_max=0.3, tau_steering=0.7, tau_throttle=0.7)
-    visualize_v20(repeat=True, sim_dt=0.05, decision_dt=0.5, render_all_frames=True, env_selected="v21", folder="DDPG/checkpoints/v21_2",
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
+    #visualize_v20(repeat=True, sim_dt=0.05, decision_dt=0.5, render_all_frames=True, env_selected="v21", folder="DDPG/checkpoints/v21_2",
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
 
+    # MPC!
+    visualize_v40(repeat=True, sim_dt=0.05, decision_dt=0.5, render_all_frames=True, env_selected="v21", folder="DDPG/checkpoints/v21_2",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
