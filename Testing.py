@@ -1247,6 +1247,7 @@ def test_milkman_smarter_SC_update():
     times = np.int32(decision_dt/sim_dt)
     env="v21"
     folder="DDPG/checkpoints/v21_2"
+    #folder="DDPG/checkpoints/v22"
     v_max=20
     v_min=-4
     alpha_max=0.5

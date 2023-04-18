@@ -2,8 +2,10 @@ from ddpg_torch import Agent, MPC_Agent
 import gym
 import numpy as np
 import os
+from collections import deque
+from copy import deepcopy
 # My own env!
-from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, MPC_environment_v40
+from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, MPC_environment_v40
 from utils import plotLearning
 
 def open_field_v00_training(episodes=5000, sim_dt=0.1, decision_dt=0.1):
@@ -218,10 +220,10 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
     """
     Here, we added knowledge of previous action, and punish for jerk.
     """
-    env = ClosedField_v21(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200)
+    env = ClosedField_v22(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200)
     best_score = -10000 # Impossibly bad
 
-    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[40], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
+    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
                 batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=chkpt_dir)
     np.random.seed(42)
 
@@ -255,43 +257,101 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
     plotLearning(score_history, filename, window=100)
 
 
-def v40_MPC_training(episodes=5000, sim_dt=0.1, SC_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v21_2"):
-    env = MPC_environment_v40(sim_dt=0.1, SC_dt=0.5, render=False, v_max=8, v_min=-2,
-	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
+def v40_MPC_training(episodes=5000, sim_dt=0.1, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5"):
+    ###############################################################################################################
+    # Parameters
+    sim_dt = 0.05
+    decision_dt = 0.5
+    times = np.int32(decision_dt/sim_dt)
+    v_max=20
+    v_min=-4
+    alpha_max=0.5
+    tau_steering=0.5
+    tau_throttle=0.5
+    # Initialization
+    env = MPC_environment_v40(sim_dt=0.1, decision_dt=0.5, render=False, v_max=v_max, v_min=v_min,
+	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
 		   episode_s=60, mpc=True)
-    agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[40], tau=0.1, env=env, 
+    env.reset()
+    agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
             batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
     
     if loadfolder:
         # TODO: specify where to load models from!
         agent.load_models(load_directory=loadfolder)
-    
     np.random.seed(0)
-    #####################################################
+    ###############################################################################################################
+    # Sets certain parameters
+    collision = False
+    trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
+    update_vision=True # need to make initial update
     score_history = []
+
+    ###############################################################################################################
+    """ One episode"""
     for i in range(episodes):
         obs = env.reset()
         done = False
         score = 0
         episode_lenght = 0
+        update_vision = True
+        """ One decision_dt """
         while not done:
-            """
-            This is where the new code fits in. 
-            - OLD CODE: act = agent.choose_action(obs)
-            - NEW CODE: Trajectory, and pick from trajectory
-            """
-            
-            act = ...
-            # Doing an actual step in env.
-            new_state, reward, done, info = env.step(act)
+            ##############
+            # Get new SC #
+            ##############
+            N = 36
+            horizon = 1000
+            real_circogram = env.vehicle.static_circogram_2(N, env.objects, horizon)
+            d1, d2, _, P2, _ = real_circogram
+            #collision = env.vehicle.collision_check(d1, d2)
 
-            """
-            ALSO: modify this learning.
-            
-            """
+            # Do not allow colliding trajectories
+            while update_vision: 
+                if update_vision:
+                    action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
+                        env.hallucinate(P2, trajectory_length, sim_dt, decision_dt, agent)
+                    
+                    # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
+                    if collided: # need to learn from that experience
+                        # 1 Add all halucinated knowledge to memory
+                        for i in range(len(states)-1, 0, -1):
+                            next_state = states[i]
+                            current_state = states[i-1]
+                            action = action_queue.pop()
+                            R = -40 * agent.gamma**i # Discounted collision reward
+                            # Only the last state is the "done" staet, where collision happend
+                            if i==len(states)-1:
+                                done = True
+                            else:
+                                done = False
+                            agent.remember_halu(current_state, action, R, next_state, int(done))
+                        # 2 Learn from hallucinated memory
+                        agent.learn(halu=True)
+                    else:
+                        # Now we are happy
+                        update_vision = False
+                        
+
+            ####################################
+            # Do we need to update trajectory? #
+            ####################################
+            d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
+            update_vision = env.update_vision(len(action_queue), d2, d2_halu)
+
+            #############################
+            # Select and execute action #
+            #############################
+            act = action_queue.popleft()
+            new_state, reward, done, info = env.step(act)
+            # Remember the transition
             agent.remember(obs, act, reward, new_state, int(done))
- 
+            # Learn from replay buffer, given batch size
             agent.learn()
+            
+            ################
+            # Book-keeping #
+            ################
             score += reward
             obs = new_state
             #env.render()
@@ -321,7 +381,6 @@ if __name__ =="__main__":
     #v20_training(episodes=10000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v20_2", filename = 'DDPG/plots/openfield_v20_2.png')
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
     # JERK ADDED
-    #v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png') # Added jerk control
-    v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, # Wanted one with 0.5 decision dt!
-                  chkpt_dir="DDPG/checkpoints/v22_5", filename = 'DDPG/plots/openfield_v22_5.png') 
+    v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png') # Added jerk control
     # MPC
+    #v40_MPC_training()

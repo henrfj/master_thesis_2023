@@ -4,6 +4,9 @@ import numpy as np
 import pygame
 import cv2
 import matplotlib.pyplot as plt
+from collections import deque
+from copy import deepcopy
+
 # My own libraries
 #import a_star_utils as autils
 import sys
@@ -1103,7 +1106,7 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 	def __init__(self, sim_dt=0.1, decision_dt=0.5, render=False, v_max=8, v_min=-2,
 	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
 		   episode_s=60):
-		super(ClosedField_v21, self).__init__()
+		super(ClosedField_v22, self).__init__()
 		#
 		self.sim_dt = sim_dt
 		self.decision_dt = decision_dt
@@ -1380,7 +1383,7 @@ class MPC_environment_v40(gym.Env): #
 	"""
 	metadata = {'render.modes': ['human']}
 
-	def __init__(self, sim_dt=0.1, SC_dt=0.5, render=False, v_max=8, v_min=-2,
+	def __init__(self, sim_dt=0.1, decision_dt=0.5, render=False, v_max=8, v_min=-2,
 	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
 		   episode_s=60, mpc=True):
 		super(MPC_environment_v40, self).__init__()
@@ -1388,7 +1391,7 @@ class MPC_environment_v40(gym.Env): #
 		self.mpc = mpc
 		#
 		self.sim_dt = sim_dt
-		self.SC_dt = SC_dt
+		self.decision_dt = decision_dt
 		self.v_max = v_max
 		self.v_min = v_min
 		self.alpha_max = alpha_max
@@ -1504,9 +1507,112 @@ class MPC_environment_v40(gym.Env): #
 			dtype=np.float32)
 		
 		return new_state
+	
+	def update_vision(self, l_action_queue, d2, d2_halu):
+		####################################
+		# Do we need to update trajectory? #
+		####################################
+		update_vision = False
+		
+		# 1 Check if trajectory is expired
+		if (l_action_queue) <= 1:
+			update_vision = True
+			#print("Out of actions!")
+		
+		# Retrieve corresponding SC from trajectory
+		""" TODO: This requires tuning! """
+		# 2 Outside is drastically different
+		diff = d2_halu - d2*0.50
+		value = np.sum(diff < 0)
+		if value:
+			update_vision = True
+		# 3 Outside gotten inside
+		diff = d2-(d2_halu*0.75) # Adding a bit of wiggle room
+		value = np.sum(diff < 0) # if only one ray is "true" in the comparison
+		if value:
+			update_vision = True
 
+		return update_vision
+	
+	def learn_from_hallucinations(self):
+		pass
+
+	def hallucinate(self, P2, trajectory_length, sim_dt, decision_dt, agent):
+		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
+		times = np.int32(decision_dt/sim_dt)
+		viz_box = Object(np.array([0, 0]), vertices=P2)
+
+		# Generate the trajectory to follow
+		halu_car = deepcopy(self.vehicle)
+		sim_trajectory = deque()
+		decision_trajectory = deque()
+		action_queue = deque()
+		halu_d2s = deque()
+		states = []
+		for _ in range(trajectory_length):
+			# Need to multiply by actual direction, as if not - it will always be a positive value.
+			try:
+				normed_velocity = np.linalg.norm(halu_car.X[2:])*halu_car.actual_direction
+			except:
+				normed_velocity = 0
+			steering_angle = halu_car.alpha
+
+			# Update goal poses in CCF (as CCF's origin has moved)
+			goal_CCF = halu_car.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+			############################
+			# Get the "new" static circogram
+			N = 36
+			horizon = 1000
+			SC = halu_car.static_circogram_2(N, [viz_box], horizon)
+			d1_, d2_, _, _, _ = SC
+			real_distances = d2_ - d1_
+			halu_d2s.append(d2_)
+			# Generate new state
+			state = np.array([goal_CCF[0], goal_CCF[1], normed_velocity, steering_angle, self.previous_throttle, self.previous_steering,
+				real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
+				real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
+				real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
+				real_distances[18], real_distances[19], real_distances[20], real_distances[21], real_distances[22], real_distances[23],
+				real_distances[24], real_distances[25], real_distances[26], real_distances[27], real_distances[28], real_distances[29],
+				real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
+				],
+				dtype=np.float32)
+			############################
+			# This state is in collision :(
+			collided = halu_car.collision_check(d1_, d2_)
+			if collided:
+				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, collided
+			############################
+			states.append(state)
+			# Choose **one** decision
+			act = agent.choose_action(state)
+			action_queue.append(act)
+
+			# Translate action signals to steering signals
+			throttle_signal = act[0]
+			if throttle_signal >= 0:
+				v_ref_t = self.v_max*throttle_signal
+			else:
+				v_ref_t = -self.v_min*throttle_signal
+			steering_signal = act[1]
+			alpha_ref_t = self.alpha_max*steering_signal
+			#action_queue.append([v_ref_t, alpha_ref_t])
+			#################################################################
+			# To avoid numerical instability: run multiple small timesteps! #
+			#################################################################
+			for _ in range(times):
+				halu_car.one_step_algorithm_2(alpha_ref=alpha_ref_t, v_ref=v_ref_t, dt=sim_dt)
+				sim_trajectory.append(halu_car.position_center)
+			decision_trajectory.append(halu_car.position_center)
+		
+		return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+	
 	def step(self, action):
-		"""Execute an actual decision step, in the environment"""
+		"""Execute one (decision) time step within the environment.
+			- Unlike the halucinated situation, this is actual moving and learning.
+			- In theory, The vehicle shouldn't collide with these steps; as trajectories are not allowed to collide!
+				- In practice however, collisions could happen, and are accounted for.
+		"""
 
 		# Translate action signals to steering signals
 		throttle_signal = action[0]
@@ -1517,12 +1623,19 @@ class MPC_environment_v40(gym.Env): #
 		steering_signal = action[1]
 		alpha_ref = self.alpha_max*steering_signal
 
-		# Call upon the vehicle step action)
-		self.vehicle.one_step_algorithm_2(alpha_ref, v_ref, dt=self.sim_dt)
-		# For rendering in sim time
-		xpos, ypos = self.vehicle.position_center
-		heading = self.vehicle.heading
-
+		# Call upon the vehicle step action
+		times = np.int32(self.decision_dt/self.sim_dt)
+		if self.will_render:
+			self.sim_trajectory = []
+		# NOTE this avoids numerical instability, by using sim_dt to simulate actions taken each decicion_dt
+		for _ in range(times):
+			self.vehicle.one_step_algorithm_2(alpha_ref, v_ref, dt=self.sim_dt)
+			# For render purposes only
+			if self.will_render:
+				xpos, ypos = self.vehicle.position_center
+				heading = self.vehicle.heading
+				self.sim_trajectory.append([xpos, ypos, heading])
+		
 		# After running n simulations steps:
 		xpos, ypos = self.vehicle.position_center
 		heading = self.vehicle.heading
@@ -1541,7 +1654,7 @@ class MPC_environment_v40(gym.Env): #
 		real_distances = d2 - d1
 
 		# Generate new state
-		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_velocity, steering_angle,
+		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_velocity, steering_angle, self.previous_throttle, self.previous_steering, 
 			real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
 			real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
 			real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
@@ -1550,6 +1663,7 @@ class MPC_environment_v40(gym.Env): #
 			real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
 			],
 			dtype=np.float32)
+
 
 		######################################
 		# Reward function! (Sparse for now?) #
@@ -1562,31 +1676,36 @@ class MPC_environment_v40(gym.Env): #
 		dist = np.linalg.norm(self.goal_CCF)
 		# Goal is reached!
 		if dist < self.goal_threshold:  # some threshold
-			reward += 400  # Goal reached!
+			reward += 40  # Goal reached!
 			done = True
 			info = "'Goal reached!'"
 
 		else:  # punish for further distance ( hill climb? )
 			# NOTE hill climber only gives flat negative reward...
-			reward += -dist*0.05
+			reward += -dist*0.01
 
 		if self.vehicle.collided:
 			done = True
-			reward = -1000
+			reward = -10
 			info = "'Collided'"
 
 		# Time is up?
 		elif self.time_step > self.episode_seconds*1/self.decision_dt:  # (30 sek)
 			done = True
-			reward += -1000  # Goal not reached :(
+			reward += -10  # Goal not reached :(
 			info = "'Time is up!'"
 		self.time_step += 1
 
+		# Punish jerk: [-2, 2]
+		reward -= np.abs(action[0] - self.previous_throttle)
+		reward -= np.abs(action[1] - self.previous_steering)
+		self.previous_throttle = action[0]
+		self.previous_steering = action[1]
 		return new_state, reward, done, info
 
 	def render(self, mode='human', close=False, render_all_frames=False, show_SC=False):
 		if render_all_frames:
-			for _, frame in enumerate(self.render_frames):
+			for _, frame in enumerate(self.sim_trajectory):
 				self.render_one_frame(frame, show_SC=show_SC)
 		else:
 			self.render_one_frame(np.array([self.vehicle.X[0], self.vehicle.X[1], self.vehicle.heading]), show_SC=show_SC)
