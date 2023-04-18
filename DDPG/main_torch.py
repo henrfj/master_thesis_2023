@@ -275,9 +275,22 @@ def v40_MPC_training(episodes=5000, sim_dt=0.1, SC_dt=0.5, plotting = 'DDPG/plot
         score = 0
         episode_lenght = 0
         while not done:
-            act = agent.choose_action(obs)
+            """
+            This is where the new code fits in. 
+            - OLD CODE: act = agent.choose_action(obs)
+            - NEW CODE: Trajectory, and pick from trajectory
+            """
+            
+            act = ...
+            # Doing an actual step in env.
             new_state, reward, done, info = env.step(act)
+
+            """
+            ALSO: modify this learning.
+            
+            """
             agent.remember(obs, act, reward, new_state, int(done))
+ 
             agent.learn()
             score += reward
             obs = new_state
@@ -307,5 +320,8 @@ if __name__ =="__main__":
     # Obstacles
     #v20_training(episodes=10000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v20_2", filename = 'DDPG/plots/openfield_v20_2.png')
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
-    v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png') # Added jerk control
+    # JERK ADDED
+    #v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png') # Added jerk control
+    v22_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, # Wanted one with 0.5 decision dt!
+                  chkpt_dir="DDPG/checkpoints/v22_5", filename = 'DDPG/plots/openfield_v22_5.png') 
     # MPC
