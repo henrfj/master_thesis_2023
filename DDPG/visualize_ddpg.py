@@ -391,7 +391,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             #
             if update_vision:
                 action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, _ = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent)
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=False)
                 # TODO: add rejection to collision trajectories, even in display
                 
                     
@@ -407,10 +407,11 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             act = action_queue.popleft()
             """ NOTE during env.step, the SC for the new step is calculated! """
             new_state, reward, done, info = env.step(act)
-            # Remember the transition
-            agent.remember(obs, act, reward, new_state, int(done))
-            # Learn from replay buffer, given batch size
-            agent.learn()
+
+            ## Remember the transition
+            #agent.remember(obs, act, reward, new_state, int(done))
+            ## Learn from replay buffer, given batch size
+            #agent.learn()
             
             ########################
             # End of state actions #

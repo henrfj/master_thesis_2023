@@ -359,14 +359,18 @@ class MPC_Agent(object):
 
         self.update_network_parameters(tau=1)
 
-    def choose_action(self, observation):
+    def choose_action(self, observation, add_noise=True):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
         mu = self.actor.forward(observation).to(self.actor.device)
-        mu_prime = mu + T.tensor(self.noise(),
-                                 dtype=T.float).to(self.actor.device)
-        self.actor.train()
-        return mu_prime.cpu().detach().numpy()
+        if add_noise:
+            mu_prime = mu + T.tensor(self.noise(),
+                                    dtype=T.float).to(self.actor.device)
+            self.actor.train()
+            return mu_prime.cpu().detach().numpy()
+        else:
+            self.actor.train()
+            return mu.cpu().detach().numpy()
 
     def remember(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
@@ -448,7 +452,6 @@ class MPC_Agent(object):
                                       (1-tau)*target_actor_dict[name].clone()
         self.target_actor.load_state_dict(actor_state_dict)
 
-    
     def save_models(self):
         self.actor.save_checkpoint()
         self.target_actor.save_checkpoint()

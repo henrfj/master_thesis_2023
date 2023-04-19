@@ -315,7 +315,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
             while update_vision: 
                 if update_vision:
                     action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
-                        env.hallucinate(trajectory_length, sim_dt, decision_dt, agent)
+                        env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=True)
                     
                     # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
                     if collided: # need to learn from that experience
@@ -328,7 +328,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
                             action = action_queue.pop()
                             R = -40 * agent.gamma**disc # Discounted collision reward
                             disc += 1 # Discount growing back in time.
-                            # Only the last state is the "done" staet, where collision happend
+                            # Only the last state is the "done" state, where collision happend
                             if j==len(states)-1:
                                 done = True
                             else:

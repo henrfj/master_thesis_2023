@@ -1536,7 +1536,7 @@ class MPC_environment_v40(gym.Env): #
 	def learn_from_hallucinations(self):
 		pass
 
-	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent):
+	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True):
 		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
 		times = np.int32(decision_dt/sim_dt)
 		if self.boost_N: # can boost accuracy of vision box in simulation
@@ -1584,14 +1584,24 @@ class MPC_environment_v40(gym.Env): #
 				],
 				dtype=np.float32)
 			############################
+			""" TODO: move rewarding to its own function!
+				- Then, could add reward already here, before returning!
+			"""
 			# This state is in collision :(
 			collided = halu_car.collision_check(d1_, d2_)
 			if collided:
 				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+			# Update goal poses in CCF (as CCF's origin has moved)
+			goal_CCF = halu_car.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+			dist = np.linalg.norm(goal_CCF)
+			# Goal is reached! Returns a shorter trajectory
+			if dist < self.goal_threshold:  # some threshold
+				print("Goal is hallucinated to be closer :D")
+				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 			############################
 			states.append(state)
 			# Choose **one** decision
-			act = agent.choose_action(state)
+			act = agent.choose_action(state, add_noise=add_noise)
 			action_queue.append(act)
 			#
 			previous_throttle_signal = act[0]
