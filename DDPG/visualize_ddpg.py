@@ -355,7 +355,7 @@ def milk_man_challenge_v2(repeat=False, sim_dt=0.1,decision_dt=0.1, render_all_f
 def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5):
     """
-        - loadfolder="DDPG/checkpoints/v22_5"; holds a good starting point, based on a basic DDPG algorithm
+        - loadfolder="DDPG/checkpoints/v22"; holds a good starting point, based on a basic DDPG algorithm
         - loadfolder="DDPG/checkpoints/v40"; is a MPC-specifically trained agent to be visualized
 
     """
@@ -363,7 +363,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
     # Initialization
     env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=True, v_max=v_max, v_min=v_min,
 	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
-		   episode_s=60, mpc=True)
+		   episode_s=60, mpc=True, boost_N=False)
     env.reset()
     agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
             batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
@@ -391,7 +391,8 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             #
             if update_vision:
                 action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, _ = \
-                    env.hallucinate(P2, trajectory_length, sim_dt, decision_dt, agent)
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent)
+                # TODO: add rejection to collision trajectories, even in display
                 
                     
             ####################################
@@ -415,7 +416,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             # End of state actions #
             ########################
             obs = new_state
-            env.render(decision_trajectory, sim_trajectory)
+            env.render(decision_trajectory, sim_trajectory, display_vision_box=True)
             # TODO: remove visited points of the trajectory, as we go...
 
 
@@ -437,5 +438,9 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
 
     # MPC!
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_mid_training",
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40", # Trained from scratch
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)

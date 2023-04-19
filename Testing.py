@@ -5,7 +5,7 @@ import numpy as np
 import sys
 from DDPG.ddpg_torch import Agent as DDPG_Agent
 from copy import deepcopy
-from DDPG.environments import ClosedField_v21
+from DDPG.environments import ClosedField_v21, ClosedField_v22
 import time
 from collections import deque
 
@@ -1444,7 +1444,6 @@ def test_milkman_smarter_SC_update():
         else:
             exit()
 
-    
 
 if __name__ == "__main__":
     #test_user_input()

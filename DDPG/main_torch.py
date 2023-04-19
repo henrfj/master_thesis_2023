@@ -258,6 +258,15 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
 
 
 def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5"):
+    """ TODO 
+    Currently "step()", calculates new env.SC that is used to generate a the new_state.
+    It corresponsd to the real SC of the new state. 
+    
+    
+    
+    
+    """
+
     ###############################################################################################################
     # Parameters
     times = np.int32(decision_dt/sim_dt)
@@ -266,6 +275,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
     alpha_max=0.5
     tau_steering=0.5
     tau_throttle=0.5
+    best_score = -20000 # Impossibly bad
     # Initialization
     env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=v_max, v_min=v_min,
 	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
@@ -286,7 +296,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
     actual_collisions_during_training = 0
     ###############################################################################################################
     """ One episode"""
-    for i in range(episodes):
+    for e in range(episodes):
         obs = env.reset()
         done = False
         score = 0
@@ -305,21 +315,21 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
             while update_vision: 
                 if update_vision:
                     action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
-                        env.hallucinate(P2, trajectory_length, sim_dt, decision_dt, agent)
+                        env.hallucinate(trajectory_length, sim_dt, decision_dt, agent)
                     
                     # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
                     if collided: # need to learn from that experience
                         rejected_trajectories += 1
                         # 1 Add all halucinated knowledge to memory
                         disc = 0
-                        for i in range(len(states)-1, 0, -1):
-                            next_state = states[i]
-                            current_state = states[i-1]
+                        for j in range(len(states)-1, 0, -1):
+                            next_state = states[j]
+                            current_state = states[j-1]
                             action = action_queue.pop()
                             R = -40 * agent.gamma**disc # Discounted collision reward
                             disc += 1 # Discount growing back in time.
                             # Only the last state is the "done" staet, where collision happend
-                            if i==len(states)-1:
+                            if j==len(states)-1:
                                 done = True
                             else:
                                 done = False
@@ -367,7 +377,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
         if avg_score > best_score:
             best_score = avg_score
             agent.save_models()
-        print('episode ', i, 'score %.2f' % score,
+        print('episode ', e, 'score %.2f' % score,
             'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
         print("Rejected trajectories:", rejected_trajectories)
         ####################################
@@ -387,4 +397,5 @@ if __name__ =="__main__":
     # JERK ADDED
     #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png')
     # MPC
-    v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22")
+    #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder=None)
+    v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22.png', save_folder="DDPG/checkpoints/v40_22", loadfolder="DDPG/checkpoints/v22")

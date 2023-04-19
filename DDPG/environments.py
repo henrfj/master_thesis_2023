@@ -1385,7 +1385,7 @@ class MPC_environment_v40(gym.Env): #
 
 	def __init__(self, sim_dt=0.1, decision_dt=0.5, render=False, v_max=8, v_min=-2,
 	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
-		   episode_s=60, mpc=True):
+		   episode_s=60, mpc=True, boost_N=None):
 		super(MPC_environment_v40, self).__init__()
 		#
 		self.mpc = mpc
@@ -1400,7 +1400,7 @@ class MPC_environment_v40(gym.Env): #
 		self.horizon = horizon
 		self.edge = edge
 		self.episode_seconds = episode_s
-
+		self.boost_N = boost_N # for boosting accuracy of vision box!
 		# Actions is to give input signal for throttle and steering.
 		self.action_space = spaces.Box(low=np.array([-1, -1]), 
 										high=np.array([1, 1]),
@@ -1492,10 +1492,10 @@ class MPC_environment_v40(gym.Env): #
 		self.SC = self.vehicle.static_circogram_2(N=36, list_objects_simul=self.objects, d_horizon=self.horizon)
 		d1, d2, _, P2, _  = self.SC
 		real_distances = d2 - d1
-		self.previous_steering_signal = 0
 		self.previous_throttle_signal = 0
+		self.previous_steering_signal = 0
 		# Generate new state
-		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_vel, steering_angle, self.previous_steering_signal, self.previous_throttle_signal,
+		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_vel, steering_angle, self.previous_throttle_signal, self.previous_steering_signal, 
 			real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
 			real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
 			real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
@@ -1536,10 +1536,14 @@ class MPC_environment_v40(gym.Env): #
 	def learn_from_hallucinations(self):
 		pass
 
-	def hallucinate(self, P2, trajectory_length, sim_dt, decision_dt, agent):
+	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent):
 		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
 		times = np.int32(decision_dt/sim_dt)
-		viz_box = Object(np.array([0, 0]), vertices=P2)
+		if self.boost_N: # can boost accuracy of vision box in simulation
+			_, _, _, P2, _ = self.vehicle.static_circogram_2(N=self.boost_N, list_objects_simul=self.objects, d_horizon=self.horizon)
+		else: # just use the Current SC
+			_, _, _, P2, _ = self.SC
+		self.viz_box = Object(np.array([0, 0]), vertices=P2)
 
 		# Generate the trajectory to follow
 		halu_car = deepcopy(self.vehicle)
@@ -1565,7 +1569,7 @@ class MPC_environment_v40(gym.Env): #
 			# Get the "new" static circogram
 			N = 36
 			horizon = 1000
-			SC = halu_car.static_circogram_2(N, [viz_box], horizon)
+			SC = halu_car.static_circogram_2(N, [self.viz_box], horizon)
 			d1_, d2_, _, _, _ = SC
 			real_distances = d2_ - d1_
 			halu_d2s.append(d2_)
@@ -1707,7 +1711,7 @@ class MPC_environment_v40(gym.Env): #
 		self.previous_steering_signal = action[1]
 		return new_state, reward, done, info
 
-	def render(self, decision_trajectory, sim_trajectory, mode='human',):
+	def render(self, decision_trajectory, sim_trajectory, mode='human', display_vision_box=False):
 		
 		for _, state in enumerate(self.real_trajectory):
 
@@ -1755,7 +1759,11 @@ class MPC_environment_v40(gym.Env): #
 				for sim_point in sim_trajectory:
 					self.gfx.draw_goal_state((sim_point[0], sim_point[1]), width=1)
 				self.gfx.draw_goal_state((point[0], point[1]), width=3)
-				
+			
+			# Draw vision box
+			if display_vision_box:
+				self.gfx.draw_one_object(self.viz_box, color=(255, 0, 0), width=4)
+
 			self.clock.tick(self.fps) # fps
 			self.gfx.display_fps(self.clock.get_fps(), font_size=32, color="red", where=(0,0))
 			self.gfx.update_display()
