@@ -1583,6 +1583,9 @@ class MPC_environment_v40(gym.Env): #
 				real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
 				],
 				dtype=np.float32)
+			
+			states.append(state)
+			
 			############################
 			""" TODO: move rewarding to its own function!
 				- Then, could add reward already here, before returning!
@@ -1596,10 +1599,8 @@ class MPC_environment_v40(gym.Env): #
 			dist = np.linalg.norm(goal_CCF)
 			# Goal is reached! Returns a shorter trajectory
 			if dist < self.goal_threshold:  # some threshold
-				print("Goal is hallucinated to be closer :D")
 				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
-			############################
-			states.append(state)
+			###########################
 			# Choose **one** decision
 			act = agent.choose_action(state, add_noise=add_noise)
 			action_queue.append(act)

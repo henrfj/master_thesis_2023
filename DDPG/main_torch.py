@@ -313,32 +313,31 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
 
             # Do not allow colliding trajectories
             while update_vision: 
-                if update_vision:
-                    action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
-                        env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=True)
-                    
-                    # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
-                    if collided: # need to learn from that experience
-                        rejected_trajectories += 1
-                        # 1 Add all halucinated knowledge to memory
-                        disc = 0
-                        for j in range(len(states)-1, 0, -1):
-                            next_state = states[j]
-                            current_state = states[j-1]
-                            action = action_queue.pop()
-                            R = -40 * agent.gamma**disc # Discounted collision reward
-                            disc += 1 # Discount growing back in time.
-                            # Only the last state is the "done" state, where collision happend
-                            if j==len(states)-1:
-                                done = True
-                            else:
-                                done = False
-                            agent.remember_halu(current_state, action, R, next_state, int(done))
-                        # 2 Learn from hallucinated memory
-                        agent.learn(halu=True)
-                    else:
-                        # Now we are happy
-                        update_vision = False
+                action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=True)
+                
+                # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
+                if collided: # need to learn from that experience
+                    rejected_trajectories += 1
+                    # 1 Add all halucinated knowledge to memory
+                    disc = 0
+                    for j in range(len(states)-1, 0, -1):
+                        next_state = states[j]
+                        current_state = states[j-1]
+                        action = action_queue.pop()
+                        R = -40 * agent.gamma**disc # Discounted collision reward
+                        disc += 1 # Discount growing back in time.
+                        # Only the last state is the "done" state, where collision happend
+                        if j==len(states)-1:
+                            done = True
+                        else:
+                            done = False
+                        agent.remember_halu(current_state, action, R, next_state, int(done))
+                    # 2 Learn from hallucinated memory
+                    agent.learn(halu=True)
+                else:
+                    # Now we are happy
+                    update_vision = False
                         
 
             ####################################
@@ -397,5 +396,5 @@ if __name__ =="__main__":
     # JERK ADDED
     #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png')
     # MPC
-    #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder=None)
-    v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22.png', save_folder="DDPG/checkpoints/v40_22", loadfolder="DDPG/checkpoints/v22")
+    #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder=None) # From scratch
+    v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22.png', save_folder="DDPG/checkpoints/v40_22", loadfolder="DDPG/checkpoints/v22") # From checkpoint v22
