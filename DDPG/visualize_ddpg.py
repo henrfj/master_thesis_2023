@@ -353,7 +353,8 @@ def milk_man_challenge_v2(repeat=False, sim_dt=0.1,decision_dt=0.1, render_all_f
 ############################################################## NEW technology! ##############################################################
 
 def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5):
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
+                  user_controlled=False):
     """
         - loadfolder="DDPG/checkpoints/v22"; holds a good starting point, based on a basic DDPG algorithm
         - loadfolder="DDPG/checkpoints/v40"; is a MPC-specifically trained agent to be visualized
@@ -363,15 +364,14 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
     # Initialization
     env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=True, v_max=v_max, v_min=v_min,
 	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
-		   episode_s=60, mpc=True, boost_N=False)
-    env.reset()
+		   episode_s=100, mpc=True, boost_N=False, environment_selection=environment_selection)
     agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
             batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
     
     if loadfolder:
         print("Loading model from:'" + loadfolder+"'")
         agent.load_models(load_directory=loadfolder)
-    np.random.seed(0)
+    #np.random.seed(0)
     ###############################################################################################################
     # Sets certain parameters
     trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
@@ -406,13 +406,31 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             #############################
             act = action_queue.popleft()
             """ NOTE during env.step, the SC for the new step is calculated! """
+
+            if user_controlled:
+                act = np.array([0, 0])
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT: # Press x button
+                        #exit()
+                        pygame.quit()
+                        sys.exit()
+                keys = pygame.key.get_pressed()
+                if keys[pygame.K_UP]:
+                    #print("UP")
+                    act[0] = 1
+                if keys[pygame.K_DOWN]:
+                    #print("DOWN")
+                    act[0] = -1
+                if keys[pygame.K_LEFT]:
+                    #print("LEFT")
+                    act[1] = -1
+                if keys[pygame.K_RIGHT]:
+                    #print("RIGHT")
+                    act[1] = 1
+
             new_state, reward, done, info = env.step(act)
 
-            ## Remember the transition
-            #agent.remember(obs, act, reward, new_state, int(done))
-            ## Learn from replay buffer, given batch size
-            #agent.learn()
-            
+        
             ########################
             # End of state actions #
             ########################
@@ -440,8 +458,8 @@ if __name__ == "__main__":
 
     # MPC!
     visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40", # Trained from scratch
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40", # Trained from scratch; did not finish!
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)

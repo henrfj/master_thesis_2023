@@ -1105,7 +1105,7 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 
 	def __init__(self, sim_dt=0.1, decision_dt=0.5, render=False, v_max=8, v_min=-2,
 	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
-		   episode_s=60):
+		   episode_s=60, environment_selection="four_walls"):
 		super(ClosedField_v22, self).__init__()
 		#
 		self.sim_dt = sim_dt
@@ -1119,6 +1119,7 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 		self.edge = edge
 		self.selection = -1
 		self.episode_seconds = episode_s
+		self.environment_selection = environment_selection
 		# Actions is to give input signal for throttle and steering.
 		self.action_space = spaces.Box(low=np.array([-1, -1]), 
 										high=np.array([1, 1]),
@@ -1172,12 +1173,13 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 			#self.objects.append(Object(np.array([0, 0]), vertices=vertices))
 			#self.vehicle.heading=np.pi/2
 		self.goal_x, self.goal_y = goal
-		
-	def reset(self):
+		return goal
+
+	def four_walls_envionment(self):
+		""" Environment with four walls """
 		# Volkswagen
 		self.vehicle = Vehicle(np.array([132, 75]), length=4, width=2,
 								heading=-np.pi/2, tau_steering=self.tau_steering, tau_throttle=self.tau_throttle, dt=self.sim_dt)
-		
 		#######################################
 		# Spawn in the outer wall & obstacles #
 		#######################################
@@ -1193,15 +1195,54 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
 		vertices = np.array([[115, 125], [115, 130], [145, 130], [145, 125]])
 		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
-		# Add side tunnels
-		#vertices = np.array([[120, 65], [120, 85], [115, 85], [115, 65]])
-		#self.objects.append(Object(np.array([0, 0]), vertices=vertices))
-		#vertices = np.array([[144, 65], [144, 85], [149, 85], [149, 65]])
-		#self.objects.append(Object(np.array([0, 0]), vertices=vertices))
-		#Goals and special obstacles added
-		self.generate_new_goal_state()
+		# Goal state
+		goal = self.generate_new_goal_state()
+		self.goal_stack = deque([goal])
+		self.goal_x, self.goal_y = self.goal_stack.popleft()
 		# Last but not least, turn goal states to CCF! (Has to be done after each step as well)
 		self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+		#######################################
+	
+	def Naples_street(self):
+		""" Environment with Slim streets """
+		# Volkswagen
+		self.vehicle = Vehicle(np.array([132, 140]), length=4, width=2,
+								heading=-np.pi/2, tau_steering=self.tau_steering, tau_throttle=self.tau_throttle, dt=self.sim_dt)
+		#######################################
+		# Spawn in the outer wall & obstacles #
+		#######################################
+		vertices = np.array([[5, 5], [5, 150], [270, 150], [270, 5]])
+		self.outer_rim = Object(np.array([0, 0]), vertices=vertices)
+		self.objects = [self.outer_rim]
+		# Add the base walls
+		vertices = np.array([[125, 25], [125, 150], [120, 150], [120, 25]]) # left wall
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[120, 50], [120, 55], [5, 55], [5, 50]]) # Plaza_1 wall
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[140, 5], [140, 68], [145, 68], [145, 5]]) # right wall 1
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[140, 80], [140, 150], [145, 150], [145, 80]]) # right wall 2
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[170, 60], [175, 60], [175, 80], [170, 80]]) # Blocker plate
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+
+
+		# Goal state
+		self.goal_stack = deque([np.array([132, 15]), np.array([15, 15]), np.array([132, 15]), np.array([132, 70]), np.array([200, 70])])
+		self.goal_x, self.goal_y = self.goal_stack.popleft()
+		# Last but not least, turn goal states to CCF! (Has to be done after each step as well)
+		self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+		#######################################
+
+	def reset(self):
+		""" Resets the environment"""
+		##### Chose the objects to spawn in #####
+		if self.environment_selection=="four_walls":
+			self.four_walls_envionment()
+		elif self.environment_selection=="naples_street":
+			self.Naples_street()
+		else:
+			self.four_walls_envionment()
 		#######################################
 		#######################################
 		# Determines if the time is up
@@ -1299,8 +1340,12 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 		# Goal is reached!
 		if dist < self.goal_threshold:  # some threshold
 			reward += 40  # Goal reached!
-			done = True
-			info = "'Goal reached!'"
+			if len(self.goal_stack) == 0:
+				done = True
+				info = "'Final goal reached!'"
+			else:
+				self.goal_x, self.goal_y = self.goal_stack.popleft()
+				info = "'Sub-goal reached!'"
 
 		else:  # punish for further distance ( hill climb? )
 			# NOTE hill climber only gives flat negative reward...
@@ -1385,7 +1430,7 @@ class MPC_environment_v40(gym.Env): #
 
 	def __init__(self, sim_dt=0.1, decision_dt=0.5, render=False, v_max=8, v_min=-2,
 	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
-		   episode_s=60, mpc=True, boost_N=None):
+		   episode_s=60, mpc=True, boost_N=None, environment_selection="four_walls"):
 		super(MPC_environment_v40, self).__init__()
 		#
 		self.mpc = mpc
@@ -1401,6 +1446,7 @@ class MPC_environment_v40(gym.Env): #
 		self.edge = edge
 		self.episode_seconds = episode_s
 		self.boost_N = boost_N # for boosting accuracy of vision box!
+		self.environment_selection = environment_selection
 		# Actions is to give input signal for throttle and steering.
 		self.action_space = spaces.Box(low=np.array([-1, -1]), 
 										high=np.array([1, 1]),
@@ -1453,12 +1499,13 @@ class MPC_environment_v40(gym.Env): #
 			#self.objects.append(Object(np.array([0, 0]), vertices=vertices))
 			self.vehicle.heading=np.pi/2
 		self.goal_x, self.goal_y = goal
-		
-	def reset(self):
+		return goal
+	
+	def four_walls_envionment(self):
+		""" Environment with four walls """
 		# Volkswagen
 		self.vehicle = Vehicle(np.array([132, 75]), length=4, width=2,
 								heading=-np.pi/2, tau_steering=self.tau_steering, tau_throttle=self.tau_throttle, dt=self.sim_dt)
-		
 		#######################################
 		# Spawn in the outer wall & obstacles #
 		#######################################
@@ -1475,10 +1522,53 @@ class MPC_environment_v40(gym.Env): #
 		vertices = np.array([[115, 125], [115, 130], [145, 130], [145, 125]])
 		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
 		# Goal state
-		self.generate_new_goal_state()
+		goal = self.generate_new_goal_state()
+		self.goal_stack = deque([goal])
+		self.goal_x, self.goal_y = self.goal_stack.popleft()
 		# Last but not least, turn goal states to CCF! (Has to be done after each step as well)
 		self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
 		#######################################
+	
+	def Naples_street(self):
+		""" Environment with Slim streets """
+		# Volkswagen
+		self.vehicle = Vehicle(np.array([132, 140]), length=4, width=2,
+								heading=-np.pi/2, tau_steering=self.tau_steering, tau_throttle=self.tau_throttle, dt=self.sim_dt)
+		#######################################
+		# Spawn in the outer wall & obstacles #
+		#######################################
+		vertices = np.array([[5, 5], [5, 150], [270, 150], [270, 5]])
+		self.outer_rim = Object(np.array([0, 0]), vertices=vertices)
+		self.objects = [self.outer_rim]
+		# Add the base walls
+		vertices = np.array([[125, 25], [125, 150], [120, 150], [120, 25]]) # left wall
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[120, 50], [120, 55], [5, 55], [5, 50]]) # Plaza_1 wall
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[140, 5], [140, 68], [145, 68], [145, 5]]) # right wall 1
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[140, 80], [140, 150], [145, 150], [145, 80]]) # right wall 2
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+		vertices = np.array([[170, 60], [175, 60], [175, 80], [170, 80]]) # Blocker plate
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+
+
+		# Goal state
+		self.goal_stack = deque([np.array([132, 15]), np.array([15, 15]), np.array([132, 15]), np.array([132, 70]), np.array([200, 70])])
+		self.goal_x, self.goal_y = self.goal_stack.popleft()
+		# Last but not least, turn goal states to CCF! (Has to be done after each step as well)
+		self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+		#######################################
+
+	def reset(self):
+		""" Resets the environment"""
+		##### Chose the objects to spawn in #####
+		if self.environment_selection=="four_walls":
+			self.four_walls_envionment()
+		elif self.environment_selection=="naples_street":
+			self.Naples_street()
+		else:
+			self.four_walls_envionment()
 		#######################################
 		# Determines if the time is up
 		self.time_step = 0
@@ -1515,7 +1605,7 @@ class MPC_environment_v40(gym.Env): #
 		
 		# 1 Check if trajectory is expired
 		if (l_action_queue) <= 1:
-			update_vision = True
+			return True
 			#print("Out of actions!")
 		
 		# Retrieve corresponding SC from trajectory
@@ -1524,14 +1614,12 @@ class MPC_environment_v40(gym.Env): #
 		diff = d2_halu - d2*0.50
 		value = np.sum(diff < 0)
 		if value:
-			update_vision = True
+			return True
 		# 3 Outside gotten inside
 		diff = d2-(d2_halu*0.75) # Adding a bit of wiggle room
 		value = np.sum(diff < 0) # if only one ray is "true" in the comparison
 		if value:
-			update_vision = True
-
-		return update_vision
+			return True
 	
 	def learn_from_hallucinations(self):
 		pass
@@ -1539,6 +1627,9 @@ class MPC_environment_v40(gym.Env): #
 	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True):
 		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
 		times = np.int32(decision_dt/sim_dt)
+		##############################################
+		# This only works in simulated environments  #
+		##############################################
 		if self.boost_N: # can boost accuracy of vision box in simulation
 			_, _, _, P2, _ = self.vehicle.static_circogram_2(N=self.boost_N, list_objects_simul=self.objects, d_horizon=self.horizon)
 		else: # just use the Current SC
@@ -1585,7 +1676,10 @@ class MPC_environment_v40(gym.Env): #
 				dtype=np.float32)
 			
 			states.append(state)
-			
+			###########################
+			# Choose **one** action
+			act = agent.choose_action(state, add_noise=add_noise)
+			action_queue.append(act)
 			############################
 			""" TODO: move rewarding to its own function!
 				- Then, could add reward already here, before returning!
@@ -1595,19 +1689,15 @@ class MPC_environment_v40(gym.Env): #
 			if collided:
 				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 			# Update goal poses in CCF (as CCF's origin has moved)
-			goal_CCF = halu_car.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
 			dist = np.linalg.norm(goal_CCF)
 			# Goal is reached! Returns a shorter trajectory
 			if dist < self.goal_threshold:  # some threshold
 				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
-			###########################
-			# Choose **one** decision
-			act = agent.choose_action(state, add_noise=add_noise)
-			action_queue.append(act)
-			#
+			############################	
 			previous_throttle_signal = act[0]
 			previous_steering_signal = act[1]
 			# Translate action signals to steering signals
+			""" TODO: add this to its own function """
 			throttle_signal = act[0]
 			if throttle_signal >= 0:
 				v_ref_t = self.v_max*throttle_signal
@@ -1696,9 +1786,13 @@ class MPC_environment_v40(gym.Env): #
 		# Goal is reached!
 		if dist < self.goal_threshold:  # some threshold
 			reward += 40  # Goal reached!
-			done = True
-			info = "'Goal reached!'"
-
+			if len(self.goal_stack) == 0:
+				done = True
+				info = "'Final goal reached!'"
+			else:
+				self.goal_x, self.goal_y = self.goal_stack.popleft()
+				info = "'Sub-goal reached!'"
+			
 		else:  # punish for further distance ( hill climb? )
 			# NOTE hill climber only gives flat negative reward...
 			reward += -dist*0.01
