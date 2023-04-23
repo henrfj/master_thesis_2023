@@ -216,7 +216,7 @@ def v21_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
 
     plotLearning(score_history, filename, window=100)
 
-def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png', environment="four_walls"):
+def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/checkpoints/v22_5", loadfolder="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png', environment="four_walls"):
     """
     Here, we added knowledge of previous action, and punish for jerk.
     """
@@ -224,8 +224,11 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
     best_score = -10000 # Impossibly bad
 
     agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
-                batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=chkpt_dir)
+                batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
     np.random.seed(42)
+    if loadfolder:
+        print("Loading model from:'" + loadfolder+"'")
+        agent.load_models(load_directory=loadfolder)
 
     score_history = []
     for i in range(episodes):
@@ -486,9 +489,9 @@ if __name__ =="__main__":
     #v20_training(episodes=10000, sim_dt=0.1, decision_dt=0.1, chkpt_dir="DDPG/checkpoints/v20_2", filename = 'DDPG/plots/openfield_v20_2.png')
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
     # JERK ADDED
-    #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png')
-    #v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
-    #v22_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v22_fw", filename = 'DDPG/plots/openfield_v22_fw.png', environment="four_walls")
+    #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22", loadfolder=None, filename = 'DDPG/plots/openfield_v22.png')
+    v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
+    #v22_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_fw", loadfolder="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22_fw.png', environment="four_walls")
     # MPC
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_naples.png', save_folder="DDPG/checkpoints/v40_npl22", loadfolder="DDPG/checkpoints/v22", environment_selection="naples_street") 
-    v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_fw.png', save_folder="DDPG/checkpoints/v40_fw", loadfolder="DDPG/checkpoints/v22", environment_selection="four_walls") 
+    #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_fw.png', save_folder="DDPG/checkpoints/v40_fw", loadfolder="DDPG/checkpoints/v22", environment_selection="four_walls") 

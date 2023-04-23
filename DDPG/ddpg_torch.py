@@ -221,14 +221,18 @@ class Agent(object):
 
         self.update_network_parameters(tau=1)
 
-    def choose_action(self, observation):
+    def choose_action(self, observation, add_noise=True):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
         mu = self.actor.forward(observation).to(self.actor.device)
-        mu_prime = mu + T.tensor(self.noise(),
-                                 dtype=T.float).to(self.actor.device)
-        self.actor.train()
-        return mu_prime.cpu().detach().numpy()
+        if add_noise:
+            mu_prime = mu + T.tensor(self.noise(),
+                                    dtype=T.float).to(self.actor.device)
+            self.actor.train()
+            return mu_prime.cpu().detach().numpy()
+        else:
+            self.actor.train()
+            return mu.cpu().detach().numpy()
 
     def remember(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
@@ -307,11 +311,17 @@ class Agent(object):
         self.critic.save_checkpoint()
         self.target_critic.save_checkpoint()
 
-    def load_models(self, Verbose=False):
-        self.actor.load_checkpoint(Verbose=Verbose)
-        self.target_actor.load_checkpoint(Verbose=Verbose)
-        self.critic.load_checkpoint(Verbose=Verbose)
-        self.target_critic.load_checkpoint(Verbose=Verbose)
+    def load_models(self, Verbose=False, load_directory=None):
+        if load_directory:
+            self.actor.load_checkpoint(Verbose=Verbose, load_directory=load_directory)
+            self.target_actor.load_checkpoint(Verbose=Verbose, load_directory=load_directory)
+            self.critic.load_checkpoint(Verbose=Verbose, load_directory=load_directory)
+            self.target_critic.load_checkpoint(Verbose=Verbose, load_directory=load_directory)
+        else:
+            self.actor.load_checkpoint(Verbose=Verbose)
+            self.target_actor.load_checkpoint(Verbose=Verbose)
+            self.critic.load_checkpoint(Verbose=Verbose)
+            self.target_critic.load_checkpoint(Verbose=Verbose)
 
     def check_actor_params(self):
         current_actor_params = self.actor.named_parameters()

@@ -1339,12 +1339,13 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 		dist = np.linalg.norm(self.goal_CCF)
 		# Goal is reached!
 		if dist < self.goal_threshold:  # some threshold
-			reward += 40  # Goal reached!
+			reward += 1000 # Goal reached!
 			if len(self.goal_stack) == 0:
 				done = True
 				info = "'Final goal reached!'"
 			else:
 				self.goal_x, self.goal_y = self.goal_stack.popleft()
+				print('Sub-goal reached!')
 				info = "'Sub-goal reached!'"
 
 		else:  # punish for further distance ( hill climb? )
@@ -1353,13 +1354,13 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 
 		if self.vehicle.collided:
 			done = True
-			reward = -10
+			reward = -500
 			info = "'Collided'"
 
 		# Time is up?
 		elif self.time_step > self.episode_seconds*1/self.decision_dt:  # (30 sek)
 			done = True
-			reward += -10  # Goal not reached :(
+			reward += -5  # Goal not reached :(
 			info = "'Time is up!'"
 		self.time_step += 1
 
@@ -1722,7 +1723,7 @@ class MPC_environment_v40(gym.Env): #
 			- In theory, The vehicle shouldn't collide with these steps; as trajectories are not allowed to collide!
 				- In practice however, collisions could happen, and are accounted for.
 		"""
-
+		# TODO; use step function of v22
 		# Translate action signals to steering signals
 		throttle_signal = action[0]
 		if throttle_signal >= 0:
@@ -1799,7 +1800,7 @@ class MPC_environment_v40(gym.Env): #
 
 		if self.vehicle.collided:
 			done = True
-			reward = -10
+			reward = -40
 			info = "'Collided'"
 
 		# Time is up?

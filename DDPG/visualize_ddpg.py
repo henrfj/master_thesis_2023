@@ -1,7 +1,7 @@
 from ddpg_torch import MPC_Agent, Agent
 import gym
 import numpy as np
-from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, MPC_environment_v40
+from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, MPC_environment_v40
 import pygame
 import sys
 
@@ -350,6 +350,43 @@ def milk_man_challenge_v2(repeat=False, sim_dt=0.1,decision_dt=0.1, render_all_f
             return
         #env.close() # Automatically when env is garbage-collected.
 
+def visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="...",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
+                  ):
+
+    env = ClosedField_v22(sim_dt=sim_dt, decision_dt=decision_dt, render=True,
+                                v_max=v_max, v_min=v_min, alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle,
+                                    horizon=200, environment_selection=environment_selection)
+    # Start a new agent
+    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
+                    batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=folder)
+    
+    # Load a pre-trained model
+    agent.load_models(Verbose=True)
+    render_all_frames=True
+    while True:
+        obs = env.reset() # restart env
+        done = False
+        score = 0
+        # One episode step should be 0.5 seconds = decision_dt
+        # So to get realtime, we need to limit ourselves to 2 fps...
+        clock = pygame.time.Clock()
+        while not done:
+            act = agent.choose_action(obs, add_noise=False)
+            new_state, reward, done, info = env.step(act)
+            obs = new_state
+            score += reward
+            if render_all_frames:
+                env.render(render_all_frames=True)
+                clock.tick(1/sim_dt)
+            else:
+                env.render()
+                clock.tick(1/decision_dt)
+        print("Total score was:", score, "info:", info)
+        #env.close() # Automatically when env is garbage-collected.
+
+
+
 ############################################################## NEW technology! ##############################################################
 
 def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
@@ -455,11 +492,27 @@ if __name__ == "__main__":
     #                      v_max=25, v_min=-12, alpha_max=0.3, tau_steering=0.7, tau_throttle=0.7)
     #visualize_v20(repeat=True, sim_dt=0.05, decision_dt=0.5, render_all_frames=True, env_selected="v21", folder="DDPG/checkpoints/v21_2",
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22", # VERY GOOD
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_fw", # FLOPPED in training
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Also stopped mid training... :U
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
+
 
     # MPC!
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40", # Trained from scratch; did not finish!
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22; smooth driver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
+
+    # New twist: new environments, also - no training during hallucinations
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment - sucks
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=False)
+    
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=False)
