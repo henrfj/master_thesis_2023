@@ -220,44 +220,48 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
     """
     Here, we added knowledge of previous action, and punish for jerk.
     """
-    env = ClosedField_v22(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200, episode_s=100, environment_selection=environment)
-    best_score = -10000 # Impossibly bad
+    try:
+        env = ClosedField_v22(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200, episode_s=100, environment_selection=environment)
+        best_score = -10000 # Impossibly bad
 
-    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
-                batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
-    np.random.seed(42)
-    if loadfolder:
-        print("Loading model from:'" + loadfolder+"'")
-        agent.load_models(load_directory=loadfolder)
+        agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
+                    batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
+        np.random.seed(42)
+        if loadfolder:
+            print("Loading model from:'" + loadfolder+"'")
+            agent.load_models(load_directory=loadfolder)
 
-    score_history = []
-    for i in range(episodes):
-        obs = env.reset()
-        done = False
-        score = 0
-        episode_lenght = 0
-        while not done:
-            act = agent.choose_action(obs)
-            new_state, reward, done, info = env.step(act)
-            agent.remember(obs, act, reward, new_state, int(done))
-            agent.learn()
-            score += reward
-            obs = new_state
-            #env.render()
-            episode_lenght += 1
+        score_history = []
+        for i in range(episodes):
+            obs = env.reset()
+            done = False
+            score = 0
+            episode_lenght = 0
+            while not done:
+                act = agent.choose_action(obs)
+                new_state, reward, done, info = env.step(act)
+                agent.remember(obs, act, reward, new_state, int(done))
+                agent.learn()
+                score += reward
+                obs = new_state
+                #env.render()
+                episode_lenght += 1
 
-        score_history.append(score)
-        
-        # Store best average models
-        avg_score = np.mean(score_history[-100:])
-        if avg_score > best_score:
-            best_score = avg_score
-            agent.save_models()
+            score_history.append(score)
+            
+            # Store best average models
+            avg_score = np.mean(score_history[-100:])
+            if avg_score > best_score:
+                best_score = avg_score
+                agent.save_models()
 
-        print('episode ', i, 'score %.2f' % score,
-            'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
+            print('episode ', i, 'score %.2f' % score,
+                'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
 
-    plotLearning(score_history, filename, window=100)
+        plotLearning(score_history, filename, window=100)
+    except:
+        plotLearning(score_history, filename, window=100)
+        v22_training(episodes=100000-i, sim_dt=sim_dt, decision_dt=decision_dt, save_folder=save_folder, loadfolder=save_folder, filename = filename, environment=environment)
 
 
 def v40_MPC_training_deprecated(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
@@ -477,6 +481,15 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
 
     plotLearning(score_history, plotting, window=100)
     print("Actual collisions during training:", actual_collisions_during_training)
+
+
+def v41_MPC_halu_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
+    """ 
+    Training *only* on hallucinations; but giving it a full train.
+    """
+
+    pass
+
 
 
 if __name__ =="__main__":
