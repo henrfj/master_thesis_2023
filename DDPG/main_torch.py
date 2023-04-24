@@ -216,7 +216,7 @@ def v21_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
 
     plotLearning(score_history, filename, window=100)
 
-def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/checkpoints/v22_5", loadfolder="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png', environment="four_walls"):
+def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/checkpoints/v22_5", loadfolder="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22.png', environment="four_walls", add_noise=True):
     """
     Here, we added knowledge of previous action, and punish for jerk.
     """
@@ -238,7 +238,7 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
             score = 0
             episode_lenght = 0
             while not done:
-                act = agent.choose_action(obs)
+                act = agent.choose_action(obs, add_noise=add_noise)
                 new_state, reward, done, info = env.step(act)
                 agent.remember(obs, act, reward, new_state, int(done))
                 agent.learn()
@@ -503,7 +503,12 @@ if __name__ =="__main__":
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
     # JERK ADDED
     #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22", loadfolder=None, filename = 'DDPG/plots/openfield_v22.png')
-    v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
+    #v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
+    # TODO The previous one never got to the final goal :( Maybe by removing the noise??
+    v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples_nn", loadfolder="DDPG/checkpoints/v22_naples",
+                  filename = 'DDPG/plots/openfield_v22_naples_nn.png', environment="naples_street", add_noise=False)
+    
+    
     #v22_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_fw", loadfolder="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22_fw.png', environment="four_walls")
     # MPC
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_naples.png', save_folder="DDPG/checkpoints/v40_npl22", loadfolder="DDPG/checkpoints/v22", environment_selection="naples_street") 

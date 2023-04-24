@@ -496,8 +496,8 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
     #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_fw", # FLOPPED in training
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
-    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Also stopped mid training... :U
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
+    visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Also stopped mid training... :U
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
 
 
     # MPC!
@@ -514,5 +514,5 @@ if __name__ == "__main__":
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment - sucks
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=False)
     
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=True)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=True)
