@@ -259,7 +259,7 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
                 'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
 
         plotLearning(score_history, filename, window=100)
-    except:
+    except RuntimeError: 
         plotLearning(score_history, filename, window=100)
         v22_training(episodes=100000-i, sim_dt=sim_dt, decision_dt=decision_dt, save_folder=save_folder, loadfolder=save_folder, filename = filename, environment=environment)
 
