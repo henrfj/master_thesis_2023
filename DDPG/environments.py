@@ -13,7 +13,7 @@ import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, 'C:/Users/henri/Desktop/MASTER_THESIS_2023')
 from Vehicle import Vehicle
-from Agent import Agent
+from DDPG.ddpg_torch import MPC_Agent
 from limo import Limo
 from visualization import Visualization
 from Object import Object
@@ -1621,9 +1621,6 @@ class MPC_environment_v40(gym.Env): #
 		value = np.sum(diff < 0) # if only one ray is "true" in the comparison
 		if value:
 			return True
-	
-	def learn_from_hallucinations(self):
-		pass
 
 	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True):
 		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
@@ -1706,7 +1703,6 @@ class MPC_environment_v40(gym.Env): #
 				v_ref_t = -self.v_min*throttle_signal
 			steering_signal = act[1]
 			alpha_ref_t = self.alpha_max*steering_signal
-			#action_queue.append([v_ref_t, alpha_ref_t])
 			#################################################################
 			# To avoid numerical instability: run multiple small timesteps! #
 			#################################################################
@@ -1716,6 +1712,39 @@ class MPC_environment_v40(gym.Env): #
 			decision_trajectory.append(halu_car.position_center)
 		
 		return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+	
+	def hallucinate_and_learn(self, trajectory_length, state, agent : MPC_Agent, add_noise=True):
+		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
+		_, _, _, P2, _ = self.SC
+		self.viz_box = Object(np.array([0, 0]), vertices=P2)
+		#############################################################
+		# Generate the trajectory to follow
+		halu_car = deepcopy(self.vehicle)
+		sim_trajectory = deque()
+		decision_trajectory = deque()
+		action_queue = deque()
+		previous_throttle_signal = self.previous_throttle_signal
+		previous_steering_signal = self.previous_steering_signal
+		#############################################################
+
+		#########
+		done = False
+		for _ in range(trajectory_length):
+			########
+			act = agent.choose_action(state, add_noise=add_noise)
+			action_queue.append(act)
+			next_state, reward, done, info = self.halu_step(halu_car, act)
+			########
+			# Remember the transition
+			agent.remember(state, act, reward, next_state, int(done))
+			# Learn from replay buffer, given batch size
+			agent.learn()
+			if info=="":
+				pass
+
+		return action_queue, sim_trajectory, decision_trajectory
+	
+	
 	
 	def step(self, action):
 		"""Execute one (decision) time step within the environment.

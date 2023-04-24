@@ -388,6 +388,7 @@ def v40_MPC_training_deprecated(episodes=5000, sim_dt=0.05, decision_dt=0.5, plo
 def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
     """ 
     As opposed to _1, this training does -no- training of the hallucination, but allows collision courses to pass!
+    Could also be called the "IRL" trainer!
     """
 
     ###############################################################################################################
@@ -503,7 +504,7 @@ if __name__ =="__main__":
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
     # JERK ADDED
     #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22", loadfolder=None, filename = 'DDPG/plots/openfield_v22.png')
-    #v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
+    #v22_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
     # TODO The previous one never got to the final goal :( Maybe by removing the noise??
     v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples_nn", loadfolder="DDPG/checkpoints/v22_naples",
                   filename = 'DDPG/plots/openfield_v22_naples_nn.png', environment="naples_street", add_noise=False)
