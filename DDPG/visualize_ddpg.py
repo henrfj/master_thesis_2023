@@ -496,7 +496,9 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
     #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_fw", # FLOPPED in training
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
-    visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Also stopped mid training... :U
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Also stopped mid training... :U
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
+    visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn", # No noice in training!
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
 
 
