@@ -391,7 +391,7 @@ def visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="...",
 
 def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
-                  user_controlled=False):
+                  trajectory_time=3.0, user_controlled=False, collision_rejection=True):
     """
         - loadfolder="DDPG/checkpoints/v22"; holds a good starting point, based on a basic DDPG algorithm
         - loadfolder="DDPG/checkpoints/v40"; is a MPC-specifically trained agent to be visualized
@@ -411,7 +411,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
     #np.random.seed(0)
     ###############################################################################################################
     # Sets certain parameters
-    trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
+    trajectory_length = np.int32(trajectory_time/decision_dt) # to get 3 second trajectories
     ###############################################################################################################
     """ One episode"""
     while True: # Keeps repeating until exited
@@ -428,7 +428,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             #
             if update_vision:
                 action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, _ = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=False)
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=False, collision_rejection=collision_rejection)
                 # TODO: add rejection to collision trajectories, even in display
                 
                     
@@ -496,10 +496,11 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
     #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_fw", # FLOPPED in training
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
-    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Also stopped mid training... :U
+    # NAPLES v22
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples", # Noisy training
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
-    visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn", # No noice in training!
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn", # No noise in training! Very smooth!
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
 
 
     # MPC!
@@ -511,10 +512,8 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
 
     # New twist: new environments, also - no training during hallucinations
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment - sucks
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=False)
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, collision_rejection=True)
     
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples", # Trained from v22; in naples environment
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", user_controlled=True)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples_nn", # Trained from v22; in naples environment
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", trajectory_time = 3.0, collision_rejection=True)

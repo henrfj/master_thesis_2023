@@ -1622,7 +1622,8 @@ class MPC_environment_v40(gym.Env): #
 		if value:
 			return True
 
-	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True):
+	
+	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True, collision_rejection=False):
 		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
 		times = np.int32(decision_dt/sim_dt)
 		##############################################
@@ -1641,6 +1642,7 @@ class MPC_environment_v40(gym.Env): #
 		action_queue = deque()
 		halu_d2s = deque()
 		states = []
+		collided = False
 		#
 		previous_throttle_signal = self.previous_throttle_signal
 		previous_steering_signal = self.previous_steering_signal
@@ -1672,28 +1674,36 @@ class MPC_environment_v40(gym.Env): #
 				real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
 				],
 				dtype=np.float32)
-			
+			##############################
+			# LOOK for path terminations #
+			##############################
+			current_pos = halu_car.position_center
+			if len(states) > 1 and collision_rejection:
+				# The first check sees if we are inside the line, with our hull!
+				# The second check sees if the trajectory line crosses the walls!
+				collided = halu_car.collision_check(d1_, d2_) or halu_car.path_collision(current_pos, prev_pos, self.viz_box)
+				if collided:
+					# Remove unwanted content
+					not_smart_move = action_queue.pop() 
+					bad_state = decision_trajectory.pop()
+					for _ in range(times):
+						bad_sub_states = sim_trajectory.pop()
+
+					return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 			states.append(state)
 			###########################
-			# Choose **one** action
+			# If not, choose **one** action
 			act = agent.choose_action(state, add_noise=add_noise)
 			action_queue.append(act)
 			############################
-			""" TODO: move rewarding to its own function!
-				- Then, could add reward already here, before returning!
-			"""
-			# This state is in collision :(
-			collided = halu_car.collision_check(d1_, d2_)
-			if collided:
-				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
-			# Update goal poses in CCF (as CCF's origin has moved)
+			# Goal reached!
 			dist = np.linalg.norm(goal_CCF)
-			# Goal is reached! Returns a shorter trajectory
 			if dist < self.goal_threshold:  # some threshold
 				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
-			############################	
+			############################
 			previous_throttle_signal = act[0]
 			previous_steering_signal = act[1]
+			prev_pos = current_pos
 			# Translate action signals to steering signals
 			""" TODO: add this to its own function """
 			throttle_signal = act[0]

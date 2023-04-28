@@ -385,7 +385,7 @@ def v40_MPC_training_deprecated(episodes=5000, sim_dt=0.05, decision_dt=0.5, plo
     plotLearning(score_history, plotting, window=100)
     print("Actual collisions during training:", actual_collisions_during_training)
 
-def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
+def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
     """ 
     As opposed to _1, this training does -no- training of the hallucination, but allows collision courses to pass!
     Could also be called the "IRL" trainer!
@@ -433,7 +433,7 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
             #################################
             if update_vision: 
                 # Do not allow colliding trajectories
-                action_queue, _, _, halu_d2s, _, _ = \
+                action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
                     env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=True)
                 update_vision = False
 
@@ -450,6 +450,8 @@ def v40_MPC_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DD
             #############################
             act = action_queue.popleft()
             """ NOTE during env.step, the SC for the new step is calculated! """
+            """ NOTE: used to feed it with **actual** states for training! Bad! Will cause it to predict and learn on different looking states :O"""
+            
             new_state, reward, done, info = env.step(act)
             # Remember the transition
             agent.remember(obs, act, reward, new_state, int(done))

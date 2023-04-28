@@ -594,6 +594,33 @@ class Vehicle(Object):
         self.collided = not all(diff)
         return self.collided #might be unnecessary
 
+    def path_collision(self, p1, p2, obj : Object):
+        """
+        Check if two consecutive points on a path (p1 and p2) intersect any sides of the object.
+        Useful for vehicle paths. It complements self.collision_check, which only checks if it is currently inside another object.
+        """
+        # Find P2 and its distance from the center
+        trjactory_line = self.eval_line_point_point(p1, p2)
+        # Check 
+        for i in range(len(obj.lines)):
+            if self.is_line_intersect_entity(trjactory_line, obj.sides[i]):
+                # That means lines do intersect; but we do not know if it intersect between p1 and p2.
+                intersection = self.find_intersection_line_line(trjactory_line, obj.lines[i])
+                v1, v2 = obj.sides[i]
+                # Check if intersection is between p1, p2
+                if (p1[0] < intersection[0] and p2[0] > intersection[0]) \
+                    or (p1[0] > intersection[0] and p2[0] < intersection[0]) \
+                    and (p1[1] < intersection[1] and p2[1] > intersection[1]) \
+                    or (p1[1] > intersection[1] and p2[1] < intersection[1]):
+                    # Check if intersection is between v1 and v2
+                    if (v1[0] < intersection[0] and v2[0] > intersection[0]) \
+                        or (v1[0] > intersection[0] and v2[0] < intersection[0]) \
+                        and (v1[1] < intersection[1] and v2[1] > intersection[1]) \
+                        or (v1[1] > intersection[1] and v2[1] < intersection[1]): 
+                        return True
+        return False
+
+
 if __name__ == "__main__":
     # Vehicle
     dt = 0.1 
