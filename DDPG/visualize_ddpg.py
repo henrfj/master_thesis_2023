@@ -415,7 +415,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
     ###############################################################################################################
     """ One episode"""
     while True: # Keeps repeating until exited
-        obs = env.reset()
+        current_state = env.reset()
         done = False
         update_vision=True # need to make initial update
         """ One decision_dt """
@@ -465,13 +465,13 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
                     #print("RIGHT")
                     act[1] = 1
 
-            new_state, reward, done, info = env.step(act)
+            next_state, _, done, _ = env.step(act)
 
         
             ########################
             # End of state actions #
             ########################
-            obs = new_state
+            current_state = next_state
             env.render(decision_trajectory, sim_trajectory, display_vision_box=True)
             # TODO: remove visited points of the trajectory, as we go...
 

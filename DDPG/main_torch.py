@@ -385,10 +385,12 @@ def v40_MPC_training_deprecated(episodes=5000, sim_dt=0.05, decision_dt=0.5, plo
     plotLearning(score_history, plotting, window=100)
     print("Actual collisions during training:", actual_collisions_during_training)
 
-def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
+def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
+                          environment_selection="four_walls", add_noise=True, collision_rejection=False):
     """ 
     As opposed to _1, this training does -no- training of the hallucination, but allows collision courses to pass!
     Could also be called the "IRL" trainer!
+    It does all its predictions / moves in the hallucinations, and then - after executing them IRL it gets a reward and learns!
     """
 
     ###############################################################################################################
@@ -420,7 +422,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
     ###############################################################################################################
     """ One episode"""
     for e in range(episodes):
-        obs = env.reset()
+        current_IRL_state = env.reset()
         done = False
         score = 0
         episode_lenght = 0
@@ -433,8 +435,9 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             #################################
             if update_vision: 
                 # Do not allow colliding trajectories
-                action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=True)
+                # 'Collided' deciedes if the trajectory is going to collide.
+                action_queue, _, _, halu_d2s, states, collided = \
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_rejection=collision_rejection)
                 update_vision = False
 
             ####################################
@@ -450,11 +453,17 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             #############################
             act = action_queue.popleft()
             """ NOTE during env.step, the SC for the new step is calculated! """
-            """ NOTE: used to feed it with **actual** states for training! Bad! Will cause it to predict and learn on different looking states :O"""
+            """ NOTE:
+            Used to feed it with **actual** states for training! Bad!
+            Will cause it to predict and learn on different looking states :O"""
             
-            new_state, reward, done, info = env.step(act)
+            next_IRL_state, reward, done, info = env.step(act)
+
+            halu_state = states.popleft()
             # Remember the transition
-            agent.remember(obs, act, reward, new_state, int(done))
+            if len(states)>0:
+                agent.remember(state=halu_state, action=act, reward=reward,
+                                next_state=halu_state[0], done=int(done))
             # Learn from replay buffer, given batch size
             agent.learn()
             
@@ -462,7 +471,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             # Book-keeping #
             ################
             score += reward
-            obs = new_state
+            current_IRL_state = next_IRL_state
             #env.render()
             episode_lenght += 1
 
@@ -506,13 +515,17 @@ if __name__ =="__main__":
     #v21_training(episodes=50000, sim_dt=0.1, decision_dt=0.5, chkpt_dir="DDPG/checkpoints/v21_2", filename = 'DDPG/plots/openfield_v21_2.png')
     # JERK ADDED
     #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22", loadfolder=None, filename = 'DDPG/plots/openfield_v22.png')
-    #v22_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png', environment="naples_street")
-    # TODO The previous one never got to the final goal :( Maybe by removing the noise??
-    v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples_nn", loadfolder="DDPG/checkpoints/v22_naples",
-                  filename = 'DDPG/plots/openfield_v22_naples_nn.png', environment="naples_street", add_noise=False)
+    #v22_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png',
+    #  environment="naples_street")
+    # TODO Make the noise lower by itself over time...
+    #v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples_nn", loadfolder="DDPG/checkpoints/v22_naples",
+    #              filename = 'DDPG/plots/openfield_v22_naples_nn.png', environment="naples_street", add_noise=False)
     
     
     #v22_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_fw", loadfolder="DDPG/checkpoints/v22", filename = 'DDPG/plots/openfield_v22_fw.png', environment="four_walls")
     # MPC
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_naples.png', save_folder="DDPG/checkpoints/v40_npl22", loadfolder="DDPG/checkpoints/v22", environment_selection="naples_street") 
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_fw.png', save_folder="DDPG/checkpoints/v40_fw", loadfolder="DDPG/checkpoints/v22", environment_selection="four_walls") 
+    # After fixing MPC training
+    v40_MPC_IRL_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_IRL_fw.png', save_folder="DDPG/checkpoints/v40_IRL_fw", loadfolder=None,
+                          environment_selection="four_walls", add_noise=True, collision_rejection=False)
