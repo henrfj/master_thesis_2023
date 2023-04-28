@@ -264,126 +264,6 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
         v22_training(episodes=100000-i, sim_dt=sim_dt, decision_dt=decision_dt, save_folder=save_folder, loadfolder=save_folder, filename = filename, environment=environment)
 
 
-def v40_MPC_training_deprecated(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
-    """ TODO 
-    Currently "step()", calculates new env.SC that is used to generate a the new_state.
-    It corresponsd to the real SC of the new state. 
-    """
-
-    ###############################################################################################################
-    # Parameters
-    #times = np.int32(decision_dt/sim_dt)
-    v_max=20
-    v_min=-4
-    alpha_max=0.5
-    tau_steering=0.5
-    tau_throttle=0.5
-    best_score = -20000 # Impossibly bad
-    # Initialization
-    env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=v_max, v_min=v_min,
-	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
-		   episode_s=60, mpc=True, environment_selection=environment_selection)
-    agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
-            batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
-    
-    if loadfolder:
-        print("Loading model from:'" + loadfolder+"'")
-        agent.load_models(load_directory=loadfolder)
-    #np.random.seed(0)
-    ###############################################################################################################
-    # Sets certain parameters
-    trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
-    # Book-keeping during training
-    score_history = []
-    actual_collisions_during_training = 0
-    ###############################################################################################################
-    """ One episode"""
-    for e in range(episodes):
-        obs = env.reset()
-        done = False
-        score = 0
-        episode_lenght = 0
-        update_vision=True # need to make initial update
-        rejected_trajectories = 0
-        """ One decision_dt """
-        while not done:
-            #################################
-            # If vision box needs an update #
-            #################################
-            while update_vision: 
-                # Do not allow colliding trajectories
-                action_queue, _, _, halu_d2s, states, collided = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=True)
-                
-                # What if the vehicle did collide in its planned trajectory? (meaning Collided == True)
-                if collided: # need to learn from that experience
-                    rejected_trajectories += 1
-                    # 1 Add all halucinated knowledge to memory
-                    disc = 0
-                    for j in range(len(states)-1, 0, -1):
-                        next_state = states[j]
-                        current_state = states[j-1]
-                        action = action_queue.pop()
-                        R = -40 * agent.gamma**disc # Discounted collision reward
-                        disc += 1 # Discount growing back in time.
-                        # Only the last state is the "done" state, where collision happend
-                        if j==len(states)-1:
-                            done = True
-                        else:
-                            done = False
-                        agent.remember_halu(current_state, action, R, next_state, int(done))
-                    # 2 Learn from hallucinated memory
-                    agent.learn(halu=True)
-                else:
-                    # Now we are happy
-                    update_vision = False
-                        
-
-            ####################################
-            # Do we need to update trajectory? #
-            ####################################
-            real_circogram = env.SC
-            _, d2, _, _, _ = real_circogram
-            d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
-            update_vision = env.update_vision(len(action_queue), d2, d2_halu)
-
-            #############################
-            # Select and execute action #
-            #############################
-            act = action_queue.popleft()
-            """ NOTE during env.step, the SC for the new step is calculated! """
-            new_state, reward, done, info = env.step(act)
-            # Remember the transition
-            agent.remember(obs, act, reward, new_state, int(done))
-            # Learn from replay buffer, given batch size
-            agent.learn()
-            
-            ################
-            # Book-keeping #
-            ################
-            score += reward
-            obs = new_state
-            #env.render()
-            episode_lenght += 1
-
-        ####################################
-        ## BOOK-Keeping from the training ##
-        ####################################
-        score_history.append(score)
-        if info == "'Collided'":
-            actual_collisions_during_training +=1
-        # Store best average models
-        avg_score = np.mean(score_history[-100:])
-        if avg_score > best_score:
-            best_score = avg_score
-            agent.save_models()
-        print('episode ', e, 'score %.2f' % score,
-            'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
-        print("Rejected trajectories:", rejected_trajectories)
-        ####################################
-
-    plotLearning(score_history, plotting, window=100)
-    print("Actual collisions during training:", actual_collisions_during_training)
 
 def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
                           environment_selection="four_walls", add_noise=True, collision_rejection=False):
@@ -463,7 +343,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             # Remember the transition
             if len(states)>0:
                 agent.remember(state=halu_state, action=act, reward=reward,
-                                next_state=halu_state[0], done=int(done))
+                                new_state=halu_state[0], done=int(done))
             # Learn from replay buffer, given batch size
             agent.learn()
             
@@ -495,12 +375,109 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
     print("Actual collisions during training:", actual_collisions_during_training)
 
 
-def v41_MPC_halu_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5", environment_selection="four_walls"):
+def v41_MPC_halu_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
+                           environment_selection="four_walls", add_noise=True, collision_rejection=False):
     """ 
-    Training *only* on hallucinations; but giving it a full train.
+    When a hallucinated path collides, it will learn from it - and keep hallucinating until it no longer collides!
     """
+    ###############################################################################################################
+    # Parameters
+    v_max=20
+    v_min=-4
+    alpha_max=0.5
+    tau_steering=0.5
+    tau_throttle=0.5
+    best_score = -20000 # Impossibly bad
+    # Initialization
+    env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=v_max, v_min=v_min,
+	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
+		   episode_s=60, mpc=True, environment_selection=environment_selection)
+    agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
+            batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
+    
+    if loadfolder:
+        print("Loading model from:'" + loadfolder+"'")
+        agent.load_models(load_directory=loadfolder)
+    #np.random.seed(0)
+    ###############################################################################################################
+    # Sets certain parameters
+    trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
+    # Book-keeping during training
+    score_history = []
+    actual_collisions_during_training = 0
+    ###############################################################################################################
+    """ One episode"""
+    for e in range(episodes):
+        current_IRL_state = env.reset()
+        done = False
+        score = 0
+        episode_lenght = 0
+        update_vision=True # need to make initial update
+        rejected_trajectories = 0
+        """ One decision_dt """
+        while not done:
+            #################################
+            # If vision box needs an update #
+            #################################
+            # TODO: make sure no colliding trajectories are used. Learn from them, without executing!
+            if update_vision: 
+                # Do not allow colliding trajectories
+                # 'Collided' deciedes if the trajectory is going to collide.
+                action_queue, _, _, halu_d2s, states, collided = \
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_rejection=collision_rejection)
+                update_vision = False
 
-    pass
+            ####################################
+            # Do we need to update trajectory? #
+            ####################################
+            real_circogram = env.SC
+            _, d2, _, _, _ = real_circogram
+            d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
+            update_vision = env.update_vision(len(action_queue), d2, d2_halu)
+
+            #############################
+            # Select and execute action #
+            #############################
+            act = action_queue.popleft()
+
+            
+            next_IRL_state, reward, done, info = env.step(act)
+
+            halu_state = states.popleft()
+            # Remember the transition
+            if len(states)>0:
+                agent.remember(state=halu_state, action=act, reward=reward,
+                                new_state=halu_state[0], done=int(done))
+            # Learn from replay buffer, given batch size
+            agent.learn()
+            
+            ################
+            # Book-keeping #
+            ################
+            score += reward
+            current_IRL_state = next_IRL_state
+            #env.render()
+            episode_lenght += 1
+
+        ####################################
+        ## BOOK-Keeping from the training ##
+        ####################################
+        score_history.append(score)
+        if info == "'Collided'":
+            actual_collisions_during_training +=1
+        # Store best average models
+        avg_score = np.mean(score_history[-100:])
+        if avg_score > best_score:
+            best_score = avg_score
+            agent.save_models()
+        print('episode ', e, 'score %.2f' % score,
+            'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
+        print("Rejected trajectories:", rejected_trajectories)
+        ####################################
+
+    plotLearning(score_history, plotting, window=100)
+    print("Actual collisions during training:", actual_collisions_during_training)
+    
 
 
 

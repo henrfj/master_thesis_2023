@@ -1641,7 +1641,7 @@ class MPC_environment_v40(gym.Env): #
 		decision_trajectory = deque()
 		action_queue = deque()
 		halu_d2s = deque()
-		states = []
+		states = deque()
 		collided = False
 		#
 		previous_throttle_signal = self.previous_throttle_signal
@@ -1817,44 +1817,86 @@ class MPC_environment_v40(gym.Env): #
 		######################################
 		# Reward function! (Sparse for now?) #
 		######################################
-		reward = 0
-		done = False
-		info = "..."
+		if self.environment_selection=="naples_street":
+			reward = 0
+			done = False
+			info = "..."
 
-		# Calculate goal distance
-		dist = np.linalg.norm(self.goal_CCF)
-		# Goal is reached!
-		if dist < self.goal_threshold:  # some threshold
-			reward += 40  # Goal reached!
-			if len(self.goal_stack) == 0:
+			# Calculate goal distance
+			dist = np.linalg.norm(self.goal_CCF)
+			# Goal is reached!
+			if dist < self.goal_threshold:  # some threshold
+				reward += 1000 # Goal reached!
+				if len(self.goal_stack) == 0:
+					done = True
+					info = "'Final goal reached!'"
+				else:
+					self.goal_x, self.goal_y = self.goal_stack.popleft()
+					print('Sub-goal reached!')
+					info = "'Sub-goal reached!'"
+
+			else:  # punish for further distance ( hill climb? )
+				# NOTE hill climber only gives flat negative reward...
+				reward += -dist*0.01
+
+			if self.vehicle.collided:
 				done = True
-				info = "'Final goal reached!'"
-			else:
-				self.goal_x, self.goal_y = self.goal_stack.popleft()
-				info = "'Sub-goal reached!'"
-			
-		else:  # punish for further distance ( hill climb? )
-			# NOTE hill climber only gives flat negative reward...
-			reward += -dist*0.01
+				reward = -500
+				info = "'Collided'"
 
-		if self.vehicle.collided:
-			done = True
-			reward = -40
-			info = "'Collided'"
+			# Time is up?
+			elif self.time_step > self.episode_seconds*1/self.decision_dt:  # (30 sek)
+				done = True
+				reward += -5  # Goal not reached :(
+				info = "'Time is up!'"
+			self.time_step += 1
 
-		# Time is up?
-		elif self.time_step > self.episode_seconds*1/self.decision_dt:  # (30 sek)
-			done = True
-			reward += -10  # Goal not reached :(
-			info = "'Time is up!'"
-		self.time_step += 1
+			# Punish jerk: [-2, 2]
+			reward -= np.abs(action[0] - self.previous_throttle)
+			reward -= np.abs(action[1] - self.previous_steering)
+			self.previous_throttle = action[0]
+			self.previous_steering = action[1]
+			return new_state, reward, done, info
+		
+		else:
+			reward = 0
+			done = False
+			info = "..."
 
-		# Punish jerk: [-2, 2]
-		reward -= np.abs(action[0] - self.previous_throttle_signal)
-		reward -= np.abs(action[1] - self.previous_steering_signal)
-		self.previous_throttle_signal = action[0]
-		self.previous_steering_signal = action[1]
-		return new_state, reward, done, info
+			# Calculate goal distance
+			dist = np.linalg.norm(self.goal_CCF)
+			# Goal is reached!
+			if dist < self.goal_threshold:  # some threshold
+				reward += 40  # Goal reached!
+				if len(self.goal_stack) == 0:
+					done = True
+					info = "'Final goal reached!'"
+				else:
+					self.goal_x, self.goal_y = self.goal_stack.popleft()
+					info = "'Sub-goal reached!'"
+				
+			else:  # punish for further distance ( hill climb? )
+				# NOTE hill climber only gives flat negative reward...
+				reward += -dist*0.01
+
+			if self.vehicle.collided:
+				done = True
+				reward = -40
+				info = "'Collided'"
+
+			# Time is up?
+			elif self.time_step > self.episode_seconds*1/self.decision_dt:  # (30 sek)
+				done = True
+				reward += -10  # Goal not reached :(
+				info = "'Time is up!'"
+			self.time_step += 1
+
+			# Punish jerk: [-2, 2]
+			reward -= np.abs(action[0] - self.previous_throttle_signal)
+			reward -= np.abs(action[1] - self.previous_steering_signal)
+			self.previous_throttle_signal = action[0]
+			self.previous_steering_signal = action[1]
+			return new_state, reward, done, info
 
 	def render(self, decision_trajectory, sim_trajectory, mode='human', display_vision_box=False):
 		
