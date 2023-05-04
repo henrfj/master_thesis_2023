@@ -13,6 +13,7 @@ import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, 'C:/Users/henri/Desktop/MASTER_THESIS_2023')
 from Vehicle import Vehicle
+from Agent import Agent # DC agents
 from DDPG.ddpg_torch import MPC_Agent
 from limo import Limo
 from visualization import Visualization
@@ -1422,6 +1423,333 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 		##################
 		self.gfx.update_display()
 		##################
+class ClosedField_v23_dyna(gym.Env): # THE MILKMAN
+	"""Custom Environment that follows gym interface.
+	- Adds knowledge of previously chosen actions, and rewards smooth driving.
+	"""
+	metadata = {'render.modes': ['human']}
+
+	def __init__(self, sim_dt=0.1, decision_dt=0.5, render=False, v_max=8, v_min=-2,
+	       alpha_max=0.8, tau_steering=0.4, tau_throttle=0.4, horizon=200, edge=150,
+		   episode_s=60):
+		super(ClosedField_v23_dyna, self).__init__()
+		#
+		self.sim_dt = sim_dt
+		self.decision_dt = decision_dt
+		self.v_max = v_max
+		self.v_min = v_min
+		self.alpha_max = alpha_max
+		self.tau_steering = tau_steering
+		self.tau_throttle = tau_throttle
+		self.horizon = horizon
+		self.edge = edge
+		self.selection = -1
+		self.episode_seconds = episode_s
+		# Actions is to give input signal for throttle and steering.
+		self.action_space = spaces.Box(low=np.array([-1, -1]), 
+										high=np.array([1, 1]),
+										dtype=np.float32)
+		# Observations space is the goal_x, goal_y (IN CCF), speed and steering angle
+		self.observation_space = spaces.Box(low=np.array([0, 0, -self.v_min, -alpha_max, -1, -1,
+						    								0, 0, 0, 0, 0, 0,
+															0, 0, 0, 0, 0, 0,
+															0, 0, 0, 0, 0, 0,
+															0, 0, 0, 0, 0, 0,
+															0, 0, 0, 0, 0, 0,
+															0, 0, 0, 0, 0, 0]),
+											high=np.array(
+											[200, 200, 	self.v_max, alpha_max, 1, 1,
+	    												self.horizon, self.horizon, self.horizon, self.horizon, self.horizon, self.horizon,
+														self.horizon, self.horizon, self.horizon, self.horizon, self.horizon, self.horizon,
+														self.horizon, self.horizon, self.horizon, self.horizon, self.horizon, self.horizon,
+														self.horizon, self.horizon, self.horizon, self.horizon, self.horizon, self.horizon,
+														self.horizon, self.horizon, self.horizon, self.horizon, self.horizon, self.horizon,
+														self.horizon, self.horizon, self.horizon, self.horizon, self.horizon, self.horizon]),
+											dtype=np.float32)
+		#
+		self.will_render=render
+		if self.will_render: # For displaying
+			MAP_DIMENSIONS = (1080, 1920)
+			self.gfx = Visualization(MAP_DIMENSIONS, pixels_per_unit=7) # Also initializes the display
+		self.objects = []
+
+	def add_objects(self, vertices):
+		self.objects.append(Object(np.array([0, 0]), vertices=vertices))
+
+	def generate_new_goal_stack(self):
+		self.goal_stack = deque()
+		for _ in range(5): # 5 goals
+			x_pos = np.random.randint(15, 260)
+			y_pos = np.random.randint(15, 140)
+			goal = np.array([x_pos, y_pos])
+			self.goal_stack.append(goal)
+		return self.goal_stack
+
+	def dynamic_dojo(self):
+		""" Environment with four walls """
+		# Volkswagen
+		self.vehicle = Vehicle(np.array([132, 75]), length=4, width=2,
+								heading=-np.pi/2, tau_steering=self.tau_steering, tau_throttle=self.tau_throttle, dt=self.sim_dt)
+		#######################################
+		# Spawn in the outer wall & obstacles #
+		#######################################
+		vertices = np.array([[5, 5], [5, 150], [270, 150], [270, 5]])
+		self.outer_rim = Object(np.array([0, 0]), vertices=vertices)
+		
+		#############################################################################################################################
+		# Add other vehicles
+		car1 = Vehicle(np.array([25, 35]),  length=8, width=4, heading=0,     tau_steering=1, tau_throttle=0.4, dt=0.1) 
+		car2 = Vehicle(np.array([250, 35]), length=8, width=4, heading=np.pi, tau_steering=1, tau_throttle=0.4, dt=0.1) 
+		car3 = Vehicle(np.array([25, 95]),  length=8, width=4, heading=0,     tau_steering=1, tau_throttle=0.4, dt=0.1) 
+		car4 = Vehicle(np.array([250, 95]), length=8, width=4, heading=np.pi, tau_steering=1, tau_throttle=0.4, dt=0.1)
+		car5 = Vehicle(np.array([25, 130]), length=8, width=4, heading=0, tau_steering=1, tau_throttle=0.4, dt=0.1)
+		car6 = Vehicle(np.array([250, 130]), length=8, width=4, heading=np.pi, tau_steering=1, tau_throttle=0.4, dt=0.1)
+
+
+		self.dynamic_obstacles = [car1, car2, car3, car4, car5, car6]
+		self.objects = [car1, car2, car3, car4, car5, car6, self.outer_rim]
+		# Spawn drivers
+		alpha_max = 1.0 # Volkswagen
+		v_max = 10 # 6 
+		v_min = -4 
+		self.limos = []
+		for car in self.dynamic_obstacles:
+			agent = Agent(v_max, v_min, alpha_max)
+			# Make it a limo!
+			limo = Limo(vehicle=car, driver=agent)
+			self.limos.append(limo)
+		# initial refs
+		self.alpha_refs = np.zeros(len(self.dynamic_obstacles))
+		self.v_refs = np.ones(len(self.dynamic_obstacles)) * 2
+		#############################################################################################################################
+		# Goal state
+		self.generate_new_goal_stack()
+		self.goal_x, self.goal_y = self.goal_stack.popleft()
+		# Last but not least, turn goal states to CCF! (Has to be done after each step as well)
+		self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+		#######################################
+
+	def reset(self):
+		""" Resets the environment"""
+		self.dynamic_dojo()
+		#######################################
+		#######################################
+		# Determines if the time is up
+		self.time_step = 0
+		#
+		self.goal_threshold = self.vehicle.length*1.2 # Give it some more wiggle room
+		#
+		normed_vel = 0
+		steering_angle = 0
+		#
+		# Get the new static circogram
+		self.SC = self.vehicle.static_circogram_2(N=36, list_objects_simul=self.objects, d_horizon=self.horizon)
+		d1, d2, _, _, _  = self.SC
+		real_distances = d2 - d1
+		#
+		self.previous_throttle = 0
+		self.previous_steering = 0
+		# Generate new state
+		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_vel, steering_angle, self.previous_throttle, self.previous_steering,
+			real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
+			real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
+			real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
+			real_distances[18], real_distances[19], real_distances[20], real_distances[21], real_distances[22], real_distances[23],
+			real_distances[24], real_distances[25], real_distances[26], real_distances[27], real_distances[28], real_distances[29],
+			real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
+			],
+			dtype=np.float32)
+
+		return new_state
+
+	def step(self, action):
+		"""Execute one time step within the environment"""
+		times = np.int32(self.decision_dt/self.sim_dt)
+		###################################################################################################################
+		# First, all dynamic obstcles
+		# Generate circogram
+		N = 18
+		horizon = 500
+		if self.will_render:
+			self.render_limo_frames = np.zeros((len(self.dynamic_obstacles), times, 4, 2))
+		for n, car in enumerate(self.dynamic_obstacles):
+			# Circograms!
+			static_circogram = car.static_circogram_2(N, self.objects[0:n]+self.objects[n+1:], horizon)
+			dynamic_circogram = car.dynamic_cicogram_2(static_circogram, self.alpha_refs[n], self.v_refs[n], seconds=3)
+			#d1, d2, _, _, _ = static_circogram
+			#car.collision_check(d1, d2)
+			#
+			limo = self.limos[n]
+			self.v_refs[n], self.alpha_refs[n] = limo.driver.determined_driver(dynamic_circogram, static_circogram, self.v_refs[n], self.alpha_refs[n],
+									risk_threshold = 0.2, stop_threshold = 4,  dist_wait=10, verbose=False)
+			
+			# Run one step
+			for t in range(times):
+				limo.vehicle.one_step_algorithm_2(alpha_ref=self.alpha_refs[n], v_ref=self.v_refs[n], dt=self.sim_dt)
+				if self.will_render:
+					self.render_limo_frames[n, t] = limo.vehicle.vertices
+		###################################################################################################################
+		# Translate action signals to steering signals
+		throttle_signal = action[0]
+		if throttle_signal >= 0:
+			v_ref = self.v_max*throttle_signal
+		else:
+			v_ref = -self.v_min*throttle_signal
+		steering_signal = action[1]
+		alpha_ref = self.alpha_max*steering_signal
+		# Call upon the vehicle step action
+		# NOTE Do not need to take new decision every simulation step (0.1 sec)
+		if self.will_render:
+			self.render_frames = []
+		for _ in range(times):
+			self.vehicle.one_step_algorithm(alpha_ref, v_ref)
+			# For rendering in sim time
+			xpos, ypos = self.vehicle.position_center
+			heading = self.vehicle.heading
+			# 
+			if self.will_render:
+				self.render_frames.append([xpos, ypos, heading])
+		
+		# After running n simulations steps:
+		xpos, ypos = self.vehicle.position_center
+		heading = self.vehicle.heading
+
+		# Need to multiply by actual direction, as if not - it will always be a positive value.
+		normed_velocity = np.linalg.norm(self.vehicle.X[2:])*self.vehicle.actual_direction
+		steering_angle = self.vehicle.alpha
+
+		# Update goal poses in CCF (as CCF's origin has moved)
+		self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
+
+		# Get the new static circogram
+		self.SC = self.vehicle.static_circogram_2(N=36, list_objects_simul=self.objects, d_horizon=self.horizon)
+		d1, d2, _, _, _  = self.SC
+		self.vehicle.collision_check(d1, d2)
+		real_distances = d2 - d1
+
+		# Generate new state
+		new_state = np.array([self.goal_CCF[0], self.goal_CCF[1], normed_velocity, steering_angle, self.previous_throttle, self.previous_steering,
+			real_distances[0], real_distances[1], real_distances[2], real_distances[3], real_distances[4], real_distances[5],
+			real_distances[6], real_distances[7], real_distances[8], real_distances[9], real_distances[10], real_distances[11],
+			real_distances[12], real_distances[13], real_distances[14], real_distances[15], real_distances[16], real_distances[17],
+			real_distances[18], real_distances[19], real_distances[20], real_distances[21], real_distances[22], real_distances[23],
+			real_distances[24], real_distances[25], real_distances[26], real_distances[27], real_distances[28], real_distances[29],
+			real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
+			],
+			dtype=np.float32)
+
+
+		######################################
+		# Reward function! (Sparse for now?) #
+		######################################
+		self.time_step += 1
+		reward = 0
+		done = False
+		info = "..."
+
+		# Calculate goal distance
+		dist = np.linalg.norm(self.goal_CCF)
+		# Goal is reached!
+		if dist < self.goal_threshold: #  and normed_velocity < 1
+			reward += 1000 # Goal reached!
+			if len(self.goal_stack) == 0:
+				done = True
+				info = "'Final goal reached!'"
+			else:
+				self.goal_x, self.goal_y = self.goal_stack.popleft()
+				print('Sub-goal reached!')
+				info = "'Sub-goal reached!'"
+				self.time_step=0 # RESET! 
+
+		else:  # punish for further distance ( hill climb? )
+			# NOTE hill climber only gives flat negative reward...
+			reward += -dist*0.01
+
+		if self.vehicle.collided:
+			done = True
+			reward = -500
+			info = "'Collided'"
+
+		# Time is up?
+		elif self.time_step > self.episode_seconds/self.decision_dt:  # (30 sek)
+			done = True
+			reward += -5  # Goal not reached :(
+			info = "'Time is up!'"
+		
+
+		# Punish jerk: [-2, 2]
+		reward -= np.abs(action[0] - self.previous_throttle)
+		reward -= np.abs(action[1] - self.previous_steering)
+		self.previous_throttle = action[0]
+		self.previous_steering = action[1]
+		
+		# Last but not least, punish reversing slightly
+		if action[0]<0: 
+			reward -= 0.1
+
+		return new_state, reward, done, info
+
+	def render(self, mode='human', close=False, render_all_frames=False, show_SC=False):
+		for t, frame in enumerate(self.render_frames):
+			self.render_one_frame(frame, t, show_SC=show_SC, )
+
+	def render_one_frame(self, state, t, show_SC=False, ):
+		##################
+		self.gfx.clear_canvas()
+    	##################
+		
+		for n in range(len(self.dynamic_obstacles)):
+			vertices = self.render_limo_frames[n, t]
+			# Sides
+			sides = [[vertices[-1], vertices[0]]]
+			for i in range(len(vertices)-1):
+				sides.append([vertices[i], vertices[i+1]])
+
+			self.gfx.draw_sides(sides)
+
+		# Extract geometry
+		length=self.vehicle.length
+		width=self.vehicle.width
+		center_pos = state[0:2]
+		heading = state[2]
+
+		# Vertices:
+		verticesCCF = [np.array([width/2,  length/2 ]),
+						np.array([-width/2, length/2 ]),
+						np.array([-width/2, -length/2]),
+						np.array([width/2,  -length/2])]
+
+		angle = heading-np.pi/2
+		R_W_V = np.array([[np.cos(angle), -np.sin(angle)],
+							[np.sin(angle), np.cos(angle)]])
+
+		verticesWCF = []
+		for vertex in verticesCCF:
+			verticesWCF.append(R_W_V@vertex + np.asarray(center_pos))
+		# Sides
+		sides = [[verticesWCF[-1], verticesWCF[0]]]
+		for i in range(len(verticesWCF)-1):
+			sides.append([verticesWCF[i], verticesWCF[i+1]])
+
+		self.gfx.draw_sides(sides)
+		# Draw heading and center of vehicle
+		self.gfx.draw_center_and_headings_simple(heading, center_pos)
+
+		# Draw the goal and goal limit
+		self.gfx.draw_goal_state(np.array([self.goal_x, self.goal_y]), threshold=self.goal_threshold)
+
+		# Draw all static obstacles
+		self.gfx.draw_sides(self.outer_rim.sides)
+		
+		if show_SC:
+			self.gfx.draw_static_circogram_data(self, self.SC, self.vehicle)
+		##################
+		self.gfx.update_display()
+		##################
+
+
+
+
 class MPC_environment_v40(gym.Env): # 
 	"""Custom Environment that follows gym interface.
 	- This environments implement the MPC behaviour we are looking for!
@@ -1623,8 +1951,13 @@ class MPC_environment_v40(gym.Env): #
 			return True
 
 	
-	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True, collision_rejection=False):
-		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
+	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True, collision_stop=False, include_collision_state=False):
+		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes.
+		parameters:
+		- add_noise: should noise be added to the actions taken by the agent?
+		- collision_stop: 
+		- 
+		"""
 		times = np.int32(decision_dt/sim_dt)
 		##############################################
 		# This only works in simulated environments  #
@@ -1674,32 +2007,41 @@ class MPC_environment_v40(gym.Env): #
 				real_distances[30], real_distances[31], real_distances[32], real_distances[33], real_distances[34], real_distances[35]
 				],
 				dtype=np.float32)
+			states.append(state)
 			##############################
 			# LOOK for path terminations #
 			##############################
 			current_pos = halu_car.position_center
-			if len(states) > 1 and collision_rejection:
+			if collision_stop:
 				# The first check sees if we are inside the line, with our hull!
 				# The second check sees if the trajectory line crosses the walls!
-				collided = halu_car.collision_check(d1_, d2_) or halu_car.path_collision(current_pos, prev_pos, self.viz_box)
+				collided = halu_car.collision_check(d1_, d2_) 
+				if len(states) > 1:
+					collided = collided or halu_car.path_collision(current_pos, prev_pos, self.viz_box)
 				if collided:
-					# Remove unwanted content
-					not_smart_move = action_queue.pop() 
-					bad_state = decision_trajectory.pop()
-					for _ in range(times):
-						bad_sub_states = sim_trajectory.pop()
-
-					return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
-			states.append(state)
-			###########################
-			# If not, choose **one** action
-			act = agent.choose_action(state, add_noise=add_noise)
-			action_queue.append(act)
-			############################
-			# Goal reached!
+					if include_collision_state:
+						return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+					else:
+						# Remove unwanted content
+						not_smart_move = action_queue.pop() 
+						collision_state = states.pop()
+						# For visualisation purposes; remove trajectory going into the collision.
+						bad_state = decision_trajectory.pop()
+						for _ in range(times):
+							bad_sub_states = sim_trajectory.pop()
+						# Terminate the hallucination early
+						return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+			#################
+			# Goal reached! #
+			#################
 			dist = np.linalg.norm(goal_CCF)
 			if dist < self.goal_threshold:  # some threshold
 				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+			############################################
+			# If no termination, choose **one** action #
+			############################################
+			act = agent.choose_action(state, add_noise=add_noise)
+			action_queue.append(act)
 			############################
 			previous_throttle_signal = act[0]
 			previous_steering_signal = act[1]
@@ -1723,39 +2065,7 @@ class MPC_environment_v40(gym.Env): #
 		
 		return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 	
-	def hallucinate_and_learn(self, trajectory_length, state, agent : MPC_Agent, add_noise=True):
-		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes."""
-		_, _, _, P2, _ = self.SC
-		self.viz_box = Object(np.array([0, 0]), vertices=P2)
-		#############################################################
-		# Generate the trajectory to follow
-		halu_car = deepcopy(self.vehicle)
-		sim_trajectory = deque()
-		decision_trajectory = deque()
-		action_queue = deque()
-		previous_throttle_signal = self.previous_throttle_signal
-		previous_steering_signal = self.previous_steering_signal
-		#############################################################
 
-		#########
-		done = False
-		for _ in range(trajectory_length):
-			########
-			act = agent.choose_action(state, add_noise=add_noise)
-			action_queue.append(act)
-			next_state, reward, done, info = self.halu_step(halu_car, act)
-			########
-			# Remember the transition
-			agent.remember(state, act, reward, next_state, int(done))
-			# Learn from replay buffer, given batch size
-			agent.learn()
-			if info=="":
-				pass
-
-		return action_queue, sim_trajectory, decision_trajectory
-	
-	
-	
 	def step(self, action):
 		"""Execute one (decision) time step within the environment.
 			- Unlike the halucinated situation, this is actual moving and learning.
@@ -1852,10 +2162,10 @@ class MPC_environment_v40(gym.Env): #
 			self.time_step += 1
 
 			# Punish jerk: [-2, 2]
-			reward -= np.abs(action[0] - self.previous_throttle)
-			reward -= np.abs(action[1] - self.previous_steering)
-			self.previous_throttle = action[0]
-			self.previous_steering = action[1]
+			reward -= np.abs(action[0] - self.previous_throttle_signal)
+			reward -= np.abs(action[1] - self.previous_steering_signal)
+			self.previous_throttle_signal = action[0]
+			self.previous_steering_signal = action[1]
 			return new_state, reward, done, info
 		
 		else:

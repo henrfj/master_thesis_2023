@@ -5,7 +5,7 @@ import os
 from collections import deque
 from copy import deepcopy
 # My own env!
-from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, MPC_environment_v40
+from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, ClosedField_v23_dyna, MPC_environment_v40
 from utils import plotLearning
 
 def open_field_v00_training(episodes=5000, sim_dt=0.1, decision_dt=0.1):
@@ -263,6 +263,53 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
         plotLearning(score_history, filename, window=100)
         v22_training(episodes=100000-i, sim_dt=sim_dt, decision_dt=decision_dt, save_folder=save_folder, loadfolder=save_folder, filename = filename, environment=environment)
 
+def v23_training(episodes=5000, episode_s=20, sim_dt=0.1, decision_dt=0.5, save_folder="DDPG/checkpoints/v23",
+                  loadfolder="DDPG/checkpoints/v22", plot_folder = 'DDPG/plots/openfield_v23.png', add_noise=False):
+    """
+    Here, we added knowledge of previous action, and punish for jerk.
+    """
+    
+    env = ClosedField_v23_dyna(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200, episode_s=episode_s)
+    best_score = -10000 # Impossibly bad
+
+    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
+                batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
+    np.random.seed(42)
+    if loadfolder:
+        print("Loading model from:'" + loadfolder+"'")
+        agent.load_models(load_directory=loadfolder)
+
+    score_history = []
+    for i in range(episodes):
+        obs = env.reset()
+        done = False
+        score = 0
+        episode_lenght = 0
+        while not done:
+            act = agent.choose_action(obs, add_noise=add_noise)
+            new_state, reward, done, info = env.step(act)
+            agent.remember(obs, act, reward, new_state, int(done))
+            agent.learn()
+            score += reward
+            obs = new_state
+            #env.render()
+            episode_lenght += 1
+
+        score_history.append(score)
+        
+        # Store best average models
+        avg_score = np.mean(score_history[-100:])
+        if avg_score > best_score:
+            best_score = avg_score
+            agent.save_models()
+
+        print('episode ', i, 'score %.2f' % score,
+            'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
+
+    plotLearning(score_history, plot_folder, window=100)
+
+
+
 
 
 def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
@@ -375,111 +422,6 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
     print("Actual collisions during training:", actual_collisions_during_training)
 
 
-def v41_MPC_halu_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
-                           environment_selection="four_walls", add_noise=True, collision_rejection=False):
-    """ 
-    When a hallucinated path collides, it will learn from it - and keep hallucinating until it no longer collides!
-    """
-    ###############################################################################################################
-    # Parameters
-    v_max=20
-    v_min=-4
-    alpha_max=0.5
-    tau_steering=0.5
-    tau_throttle=0.5
-    best_score = -20000 # Impossibly bad
-    # Initialization
-    env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=v_max, v_min=v_min,
-	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
-		   episode_s=60, mpc=True, environment_selection=environment_selection)
-    agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
-            batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
-    
-    if loadfolder:
-        print("Loading model from:'" + loadfolder+"'")
-        agent.load_models(load_directory=loadfolder)
-    #np.random.seed(0)
-    ###############################################################################################################
-    # Sets certain parameters
-    trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
-    # Book-keeping during training
-    score_history = []
-    actual_collisions_during_training = 0
-    ###############################################################################################################
-    """ One episode"""
-    for e in range(episodes):
-        current_IRL_state = env.reset()
-        done = False
-        score = 0
-        episode_lenght = 0
-        update_vision=True # need to make initial update
-        rejected_trajectories = 0
-        """ One decision_dt """
-        while not done:
-            #################################
-            # If vision box needs an update #
-            #################################
-            # TODO: make sure no colliding trajectories are used. Learn from them, without executing!
-            if update_vision: 
-                # Do not allow colliding trajectories
-                # 'Collided' deciedes if the trajectory is going to collide.
-                action_queue, _, _, halu_d2s, states, collided = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_rejection=collision_rejection)
-                update_vision = False
-
-            ####################################
-            # Do we need to update trajectory? #
-            ####################################
-            real_circogram = env.SC
-            _, d2, _, _, _ = real_circogram
-            d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
-            update_vision = env.update_vision(len(action_queue), d2, d2_halu)
-
-            #############################
-            # Select and execute action #
-            #############################
-            act = action_queue.popleft()
-
-            
-            next_IRL_state, reward, done, info = env.step(act)
-
-            halu_state = states.popleft()
-            # Remember the transition
-            if len(states)>0:
-                agent.remember(state=halu_state, action=act, reward=reward,
-                                new_state=halu_state[0], done=int(done))
-            # Learn from replay buffer, given batch size
-            agent.learn()
-            
-            ################
-            # Book-keeping #
-            ################
-            score += reward
-            current_IRL_state = next_IRL_state
-            #env.render()
-            episode_lenght += 1
-
-        ####################################
-        ## BOOK-Keeping from the training ##
-        ####################################
-        score_history.append(score)
-        if info == "'Collided'":
-            actual_collisions_during_training +=1
-        # Store best average models
-        avg_score = np.mean(score_history[-100:])
-        if avg_score > best_score:
-            best_score = avg_score
-            agent.save_models()
-        print('episode ', e, 'score %.2f' % score,
-            'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
-        print("Rejected trajectories:", rejected_trajectories)
-        ####################################
-
-    plotLearning(score_history, plotting, window=100)
-    print("Actual collisions during training:", actual_collisions_during_training)
-    
-
-
 
 if __name__ =="__main__":
     # IN WCF
@@ -504,5 +446,9 @@ if __name__ =="__main__":
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_naples.png', save_folder="DDPG/checkpoints/v40_npl22", loadfolder="DDPG/checkpoints/v22", environment_selection="naples_street") 
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_fw.png', save_folder="DDPG/checkpoints/v40_fw", loadfolder="DDPG/checkpoints/v22", environment_selection="four_walls") 
     # After fixing MPC training
-    v40_MPC_IRL_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_IRL_fw.png', save_folder="DDPG/checkpoints/v40_IRL_fw", loadfolder=None,
-                          environment_selection="four_walls", add_noise=True, collision_rejection=False)
+    #v40_MPC_IRL_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_IRL_fw.png', save_folder="DDPG/checkpoints/v40_IRL_fw", loadfolder="DDPG/checkpoints/v22",
+    #                      environment_selection="four_walls", add_noise=False, collision_rejection=True)
+    
+    # Dynamic obstacles!
+    v23_training(episodes=50000, episode_s=20, sim_dt=0.1,decision_dt=0.5, save_folder="DDPG/checkpoints/v23",
+                  loadfolder="DDPG/checkpoints/v22", plot_folder = 'DDPG/plots/openfield_v23.png', add_noise=False)

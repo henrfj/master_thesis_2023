@@ -1,7 +1,7 @@
 from ddpg_torch import MPC_Agent, Agent
 import gym
 import numpy as np
-from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, MPC_environment_v40
+from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, ClosedField_v23_dyna, MPC_environment_v40
 import pygame
 import sys
 
@@ -385,17 +385,70 @@ def visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="...",
         print("Total score was:", score, "info:", info)
         #env.close() # Automatically when env is garbage-collected.
 
+def visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="...",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False):
+
+    env = ClosedField_v23_dyna(sim_dt=sim_dt, decision_dt=decision_dt, render=True,
+                                v_max=v_max, v_min=v_min, alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle,
+                                    horizon=200, episode_s=200)
+    # Start a new agent
+    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
+                    batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=folder)
+    
+    # Load a pre-trained model
+    agent.load_models(Verbose=True)
+    while True:
+        obs = env.reset() # restart env
+        done = False
+        score = 0
+        # One episode step should be 0.5 seconds = decision_dt
+        # So to get realtime, we need to limit ourselves to 2 fps...
+        clock = pygame.time.Clock()
+        while not done:
+            if user_controlled:
+                act = np.array([0, 0])
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT: # Press x button
+                        #exit()
+                        pygame.quit()
+                        sys.exit()
+                keys = pygame.key.get_pressed()
+                if keys[pygame.K_UP]:
+                    #print("UP")
+                    act[0] = 1
+                if keys[pygame.K_DOWN]:
+                    #print("DOWN")
+                    act[0] = -1
+                if keys[pygame.K_LEFT]:
+                    #print("LEFT")
+                    act[1] = -1
+                if keys[pygame.K_RIGHT]:
+                    #print("RIGHT")
+                    act[1] = 1
+            else:
+                act = agent.choose_action(obs, add_noise=False)
+
+            new_state, reward, done, info = env.step(act)
+            obs = new_state
+            score += reward
+
+            
+
+            env.render(render_all_frames=True)
+            clock.tick(1/sim_dt)
+
+        print("Total score was:", score, "info:", info)
+        #env.close() # Automatically when env is garbage-collected.
 
 
 ############################################################## NEW technology! ##############################################################
 
 def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
-                  trajectory_time=3.0, user_controlled=False, collision_rejection=True):
+                  trajectory_time=3.0, user_controlled=False, add_noise=False, collision_stop=True, include_collision_state=False):
     """
         - loadfolder="DDPG/checkpoints/v22"; holds a good starting point, based on a basic DDPG algorithm
         - loadfolder="DDPG/checkpoints/v40"; is a MPC-specifically trained agent to be visualized
-
     """
     
     # Initialization
@@ -427,21 +480,27 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             d1, d2, _, P2, _ = real_circogram
             #
             if update_vision:
-                action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, _ = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=False, collision_rejection=collision_rejection)
+                action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, collided = \
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_stop=collision_stop, include_collision_state=include_collision_state)
                 # TODO: add rejection to collision trajectories, even in display
-                
-                    
+
+ 
             ####################################
             # Do we need to update trajectory? #
             ####################################
             d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
             update_vision = env.update_vision(len(action_queue), d2, d2_halu)
 
+
             #############################
             # Select and execute action #
             #############################
-            act = action_queue.popleft()
+            if len(action_queue) == 0:
+                # This happens when trajectory is only 1 step, and it lead to collision... :(
+                print("No actions")
+                act = [0, 0]
+            else:
+                act = action_queue.popleft()
             """ NOTE during env.step, the SC for the new step is calculated! """
 
             if user_controlled:
@@ -506,14 +565,22 @@ if __name__ == "__main__":
     # MPC!
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40", # Trained from scratch; did not finish!
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22; smooth driver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
-
+#
     # New twist: new environments, also - no training during hallucinations
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, collision_rejection=True)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, collision_rejection=True)
     
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples_nn", # Trained from v22; in naples environment
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", trajectory_time = 3.0, collision_rejection=True)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.25, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples_nn", # Using v22_nn; in naples environment - GOOD
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", trajectory_time = 10.0,
+    #                add_noise=False, collision_stop=True, include_collision_state=False)
+
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v40_IRL_fw", # 
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, 
+    #              add_noise=False, collision_stop=True, include_collision_state=False)
+    
+
+    # Dynamic!
+    visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)

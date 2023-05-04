@@ -1223,9 +1223,9 @@ if __name__ == "__main__":
     #driving_with_multiple_random_drivers_maze()
 
     #driving_with_single_determined_driver()
-    #driving_with_many_determined_drivers()
+    driving_with_many_determined_drivers()
 
-    driving_with_many_boats()
+    #driving_with_many_boats()
 
 
     
