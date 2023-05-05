@@ -42,3 +42,10 @@
     - sim_dt=0.05, decision_dt=0.5, v_max=25, v_min=-8, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5
     - For some reason: always prefer to reverse!....
     - Also added N=36 static rays for better vision.
+
+
+##### V40
+- FW environment! v41_IRL_Fw: Some bug made it look bad (looking at score): but only collided 856 times after 50.000 episodes!
+    - Used settings: "collision_rejection=True", to reject colliding trajectories.
+    - Why would it still collide? It would still collide if proposedtrajectory stopped right in front of wall, so when new halu came along, nothing to do - due to sliding.
+    - Compared to v22: (waiting)

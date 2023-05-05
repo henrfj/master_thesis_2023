@@ -220,48 +220,52 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
     """
     Here, we added knowledge of previous action, and punish for jerk.
     """
-    try:
-        env = ClosedField_v22(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200, episode_s=100, environment_selection=environment)
-        best_score = -10000 # Impossibly bad
+    actual_collisions_during_training = 0
+    env = ClosedField_v22(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, horizon=200, episode_s=100, environment_selection=environment)
+    best_score = -10000 # Impossibly bad
 
-        agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
-                    batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
-        np.random.seed(42)
-        if loadfolder:
-            print("Loading model from:'" + loadfolder+"'")
-            agent.load_models(load_directory=loadfolder)
+    agent = Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, #alpha=0.000025, beta=0.00025, tau=0.001
+                batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
+    np.random.seed(42)
+    if loadfolder:
+        print("Loading model from:'" + loadfolder+"'")
+        agent.load_models(load_directory=loadfolder)
+    actual_collisions_during_training
+    score_history = []
+    for i in range(episodes):
+        obs = env.reset()
+        done = False
+        score = 0
+        episode_lenght = 0
+        while not done:
+            act = agent.choose_action(obs, add_noise=add_noise)
+            new_state, reward, done, info = env.step(act)
+            agent.remember(obs, act, reward, new_state, int(done))
+            agent.learn()
+            score += reward
+            obs = new_state
+            #env.render()
+            episode_lenght += 1
 
-        score_history = []
-        for i in range(episodes):
-            obs = env.reset()
-            done = False
-            score = 0
-            episode_lenght = 0
-            while not done:
-                act = agent.choose_action(obs, add_noise=add_noise)
-                new_state, reward, done, info = env.step(act)
-                agent.remember(obs, act, reward, new_state, int(done))
-                agent.learn()
-                score += reward
-                obs = new_state
-                #env.render()
-                episode_lenght += 1
+        score_history.append(score)
+        
+        # Store best average models
+        avg_score = np.mean(score_history[-100:])
+        if avg_score > best_score:
+            best_score = avg_score
+            agent.save_models()
+        
+        if info == "'Collided'":
+            actual_collisions_during_training +=1
 
-            score_history.append(score)
-            
-            # Store best average models
-            avg_score = np.mean(score_history[-100:])
-            if avg_score > best_score:
-                best_score = avg_score
-                agent.save_models()
+        print('episode ', i, 'score %.2f' % score,
+            'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
+        print("Total collisions;", actual_collisions_during_training)
+        if i % 100 == 0:
+            plotLearning(score_history, filename, window=100)
 
-            print('episode ', i, 'score %.2f' % score,
-                'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
-
-        plotLearning(score_history, filename, window=100)
-    except RuntimeError: 
-        plotLearning(score_history, filename, window=100)
-        v22_training(episodes=100000-i, sim_dt=sim_dt, decision_dt=decision_dt, save_folder=save_folder, loadfolder=save_folder, filename = filename, environment=environment)
+    plotLearning(score_history, filename, window=100)
+    
 
 def v23_training(episodes=5000, episode_s=20, sim_dt=0.1, decision_dt=0.5, save_folder="DDPG/checkpoints/v23",
                   loadfolder="DDPG/checkpoints/v22", plot_folder = 'DDPG/plots/openfield_v23.png', add_noise=False):
@@ -307,9 +311,6 @@ def v23_training(episodes=5000, episode_s=20, sim_dt=0.1, decision_dt=0.5, save_
             'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
 
     plotLearning(score_history, plot_folder, window=100)
-
-
-
 
 
 def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
@@ -363,8 +364,9 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             if update_vision: 
                 # Do not allow colliding trajectories
                 # 'Collided' deciedes if the trajectory is going to collide.
+                # Should "include collision state = TRUE" be included? to learn from collisions?"
                 action_queue, _, _, halu_d2s, states, collided = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_rejection=collision_rejection)
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_rejection=collision_rejection, include_collision_state=False)
                 update_vision = False
 
             ####################################
@@ -436,7 +438,6 @@ if __name__ =="__main__":
     #v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22", loadfolder=None, filename = 'DDPG/plots/openfield_v22.png')
     #v22_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples", loadfolder="DDPG/checkpoints/v22_naples", filename = 'DDPG/plots/openfield_v22_naples.png',
     #  environment="naples_street")
-    # TODO Make the noise lower by itself over time...
     #v22_training(episodes=100000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_naples_nn", loadfolder="DDPG/checkpoints/v22_naples",
     #              filename = 'DDPG/plots/openfield_v22_naples_nn.png', environment="naples_street", add_noise=False)
     
@@ -445,10 +446,14 @@ if __name__ =="__main__":
     # MPC
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_naples.png', save_folder="DDPG/checkpoints/v40_npl22", loadfolder="DDPG/checkpoints/v22", environment_selection="naples_street") 
     #v40_MPC_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_22_fw.png', save_folder="DDPG/checkpoints/v40_fw", loadfolder="DDPG/checkpoints/v22", environment_selection="four_walls") 
+    
     # After fixing MPC training
     #v40_MPC_IRL_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40_IRL_fw.png', save_folder="DDPG/checkpoints/v40_IRL_fw", loadfolder="DDPG/checkpoints/v22",
     #                      environment_selection="four_walls", add_noise=False, collision_rejection=True)
     
     # Dynamic obstacles!
-    v23_training(episodes=50000, episode_s=20, sim_dt=0.1,decision_dt=0.5, save_folder="DDPG/checkpoints/v23",
-                  loadfolder="DDPG/checkpoints/v22", plot_folder = 'DDPG/plots/openfield_v23.png', add_noise=False)
+    #v23_training(episodes=50000, episode_s=20, sim_dt=0.1,decision_dt=0.5, save_folder="DDPG/checkpoints/v23",
+    #              loadfolder="DDPG/checkpoints/v22", plot_folder = 'DDPG/plots/openfield_v23.png', add_noise=False)
+    
+    # Collisions tester
+    v22_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v22_collision", loadfolder=None, filename = 'DDPG/plots/openfield_v22_collisions.png')
