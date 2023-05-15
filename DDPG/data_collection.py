@@ -39,7 +39,7 @@ def data_v22(episodes = 10000, sim_dt=0.05, decision_dt=0.5, folder="...",
         if info == "'Collided'":
             collision_history[e] = 1
         score_history[e] = score
-        
+        #print(e, score, info)
     np.savetxt('DDPG/rundata/'+store_run_data+'_ch.txt', collision_history, fmt='%d')
     np.savetxt('DDPG/rundata/'+store_run_data+'_sh.txt', np.asarray(score_history))
 
@@ -128,9 +128,9 @@ if __name__ =="__main__":
     #              store_run_data="v22_fw_data")
 
 
-    #data_v22(episodes = 10000, sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn",
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street",
-    #              store_run_data="v22_naples_data")
+    data_v22(episodes = 500, sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street",
+                  store_run_data="v22_naples_data")
     
     #######
     # v40 #
@@ -140,8 +140,8 @@ if __name__ =="__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
     #              trajectory_time=3.0, add_noise=False, collision_stop=True, include_collision_state=False, store_run_data="v40_v22_fw_data")
 
-    data_v40(episodes = 10000, sim_dt=0.05, decision_dt=0.5, save_folder="", loadfolder="DDPG/checkpoints/v22_naples_nn",
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street",
-                  trajectory_time=3.0, add_noise=False, collision_stop=True, include_collision_state=False, store_run_data="v40_v22_naples_data")
+    #data_v40(episodes = 10000, sim_dt=0.05, decision_dt=0.5, save_folder="", loadfolder="DDPG/checkpoints/v22_naples_nn",
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street",
+    #              trajectory_time=3.0, add_noise=False, collision_stop=True, include_collision_state=False, store_run_data="v40_v22_naples_data")
 
     pass
