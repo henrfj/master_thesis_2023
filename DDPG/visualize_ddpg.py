@@ -631,6 +631,10 @@ def visualize_v41(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             env.render(decision_trajectory, sim_trajectory, display_vision_box=True)
             
 
+
+
+
+
 if __name__ == "__main__":
     #################### WCF
     #visualize_v00(repeat=True, sim_dt=0.05,decision_dt=0.5, render_all_frames=True, folder="DDPG/checkpoints/v00")
@@ -663,28 +667,42 @@ if __name__ == "__main__":
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22; smooth driver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
-#
-    # New twist: new environments, also - no training during hallucinations
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, collision_rejection=True)
     
+    # GOOD STUFF
     #visualize_v40(sim_dt=0.05, decision_dt=0.25, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples_nn", # Using v22_nn; in naples environment - GOOD
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", trajectory_time = 10.0,
     #                add_noise=False, collision_stop=True, include_collision_state=False)
-
-
-    # IRL trainer of v40 - from scratch!!!!!!!!!!!!!!!
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v40_IRL_fw", # Suprise surprise! IT WORKS!!! Only 856 Collisions in training!
+    #############################################
+    # V40 self trained
+    
+    # IRL trainer of v40 - from scratch!!!!!!!!!!!!!!! # Suprise surprise! IT WORKS!!! BUT 856 Collisions in training!
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v40_IRL_fw", 
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, 
     #              add_noise=False, collision_stop=True, include_collision_state=False)
     
-
+    # Score looks terrible - it looks terrible
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v40_fw_plotty", 
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, 
+    #              add_noise=False, collision_stop=True, include_collision_state=False)
+    
+    # Score looks terrible
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v40_naples_plotty", 
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", trajectory_time = 10.0, 
+    #              add_noise=False, collision_stop=True, include_collision_state=False)
+    
+    #############################################
     # Dynamic! Does collide from time to times - but how often?
-    #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
+    visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
+    #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23_reverser",
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
     
     # Dynamic v41 environment
     # TODO: use collision_test, to also (Instead?) trigger "update vision" if the trajectory is intersected.
     visualize_v41(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v23", 
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, trajectory_time = 3.0, 
-                  add_noise=False, collision_stop=True, include_collision_state=False, repeat_forever=True)
+                  add_noise=False, collision_stop=False, include_collision_state=True, repeat_forever=True)
+    
+

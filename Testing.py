@@ -296,7 +296,8 @@ def test_visual_box():
     collision = False
     clock = pygame.time.Clock()
     fps = 1/dt
-
+    #
+    draw_objects_toggle = True
     while True:
         # Default steering parameters
         alpha_ref = 0
@@ -321,18 +322,23 @@ def test_visual_box():
             if keys[pygame.K_RIGHT]:
                 #print("RIGHT")
                 alpha_ref += alpha_max
+            if keys[pygame.K_t]:
+                draw_objects_toggle = not draw_objects_toggle 
                 
             ##############
             # Visualize! #
             ##############   
             gfx.clear_canvas()
-            gfx.draw_all_objects(objects) 
+            if draw_objects_toggle:
+                gfx.draw_all_objects(objects) 
+            else:
+                gfx.draw_one_object(car1)
             
             # Generate circogram
             N = 36
             horizon = 1000
             #
-            static_circogram = car1.static_circogram_2(N, objects[1:], horizon)
+            static_circogram = car1.static_circogram_2(N, objects[1:], horizon, gausian_noise=[0, 0.01])
             #
             d1, d2, _, P2, _ = static_circogram
             collision = car1.collision_check(d1, d2)
@@ -342,7 +348,8 @@ def test_visual_box():
 
             gfx.draw_headings(cars, scale=True)
             gfx.draw_centers(cars)
-            gfx.draw_static_circogram_data(static_circogram, car1)
+            if draw_objects_toggle:
+                gfx.draw_static_circogram_data(static_circogram, car1)
             # Run one cycle
             limo.vehicle.one_step_algorithm(alpha_ref=alpha_ref, v_ref=v_ref)
 
@@ -381,6 +388,8 @@ def test_visual_box_update_rule():
     fps = 1/dt
     update_vision=True # need to make initial update
     goal_x, goal_y = (170, 95)
+    #
+    draw_objects_toggle = True
     while True:
         # Default steering parameters
         alpha_ref = 0
@@ -450,7 +459,8 @@ def test_visual_box_update_rule():
             # Visualize! #
             ##############   
             gfx.clear_canvas()
-            gfx.draw_all_objects(objects) 
+            if draw_objects_toggle:
+                gfx.draw_all_objects(objects) 
             gfx.draw_one_object(viz_box, color=(255, 0, 0), width=4)
             gfx.draw_goal_state((goal_x, goal_y), threshold=10)
             gfx.draw_headings(cars, scale=True)
@@ -1447,7 +1457,7 @@ def test_milkman_smarter_SC_update():
 
 if __name__ == "__main__":
     #test_user_input()
-    #test_visual_box()
+    test_visual_box()
     #test_visual_box_update_rule()
     """
     What we learned: 
@@ -1456,8 +1466,8 @@ if __name__ == "__main__":
     """
     #test_pre_trained_MPC_agent() # # vbox does not update
     #test_pre_trained_with_update_vbox() 
-    while True:
-        #test_milkman_full() # using sim_dt = decision_dt for numerical stability
-        #test_milkman_smart_SC_update() # Also using sim_dt = decision_dt, but(!) waiting longer between SC update
-        test_milkman_smarter_SC_update() # Uses decision_dt>>sim_dt, and only doing SC update once every decision update!
-    #test_numerical_stability()
+    #while True:
+    #    #test_milkman_full() # using sim_dt = decision_dt for numerical stability
+    #    #test_milkman_smart_SC_update() # Also using sim_dt = decision_dt, but(!) waiting longer between SC update
+    #    test_milkman_smarter_SC_update() # Uses decision_dt>>sim_dt, and only doing SC update once every decision update!
+    ##test_numerical_stability()

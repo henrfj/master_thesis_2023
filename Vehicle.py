@@ -411,7 +411,7 @@ class Vehicle(Object):
     ##################
     # MY own attempt #
     ##################
-    def static_circogram_2(self, N: int, list_objects_simul, d_horizon: float):
+    def static_circogram_2(self, N: int, list_objects_simul, d_horizon: float, gausian_noise=None):
             """
             A slight alteration of the original "static_circogram" function,
              removing a bug where if the vehicle turned, the circogram would stop working properly.
@@ -422,6 +422,10 @@ class Vehicle(Object):
             P1 = np.zeros((N, 2))
             P2 = np.zeros((N,2))
             angles = np.zeros(N)
+
+            if gausian_noise:
+                mu, sigma = gausian_noise
+                noise = np.random.normal(mu, sigma, N)
 
             for n in range(N):
                 """
@@ -459,7 +463,19 @@ class Vehicle(Object):
                 if all_intersections:  # if it not empty
                     min_index = all_distances.index(min(all_distances))  # find position of the minimum distance in the list
                     P2[n]=all_intersections[min_index]
-                    dist_center_P2[n]=all_distances[min_index]
+                    dist_center_P2[n]=all_distances[min_index] 
+                    
+                    if gausian_noise:
+                        #
+                        dist_center_P2[n] += dist_center_P2[n]*noise[n]
+                        # Alsp move P2
+                        vec_wcf = P2[n] - self.position_center 
+                        vec_ccf = self.WCF_rotate_CCF(vec_wcf)
+                        # IN CCF 
+                        vec_ccf = vec_ccf + vec_ccf*noise[n]
+                        P2[n] = self.CCFtoWCF(vec_ccf)
+
+
                 else: # No intersections
                     P2[n]=None
                     dist_center_P2[n]=d_horizon
