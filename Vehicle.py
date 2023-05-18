@@ -212,6 +212,87 @@ class Vehicle(Object):
     def one_step_algorithm_2(self, alpha_ref, v_ref, dt):
         """
         Running one step of the update algorithm.
+        This differs from one_step_algorithm by adding the ability to tune dt.
+        """
+        ####################################
+        # Step 0: Are we reversing or not? #
+        ####################################
+        # TODO: All bugs connected to directions.
+        # >>>>>> Sometimes, it actually runs backwards even if v_ref > 0
+        # >>>>>> Then, we get ~infinite values in the update function below.
+        if v_ref > 0:
+            self.focus_direction = 1
+        elif v_ref < 0:
+            self.focus_direction = -1
+        else: self.focus_direction = 0
+
+
+        # TODO: rather set based on v_ref, instead of actual v - might just be sliding.
+        v_k = self.X[2:,:] # Current speed from state matrix
+        v_k_VCF = self.WCF_rotate_VCF(v_k) # rotate to VCF
+        if v_k_VCF[1, 0]>0: # Driving down y axis or not.
+            self.actual_direction=1
+        elif v_k_VCF[1, 0]<0:
+            self.actual_direction=-1
+        else:
+            self.actual_direction=0
+    
+        #####################################
+        # Step 1: update u, alpha, find B_k #
+        #####################################
+
+        self.alpha = self.alpha + self.K_a * (alpha_ref - self.alpha)
+        u_k = self.K_v * (v_ref-self.actual_direction*np.linalg.norm(v_k))
+
+        # Small value problem.
+        if np.abs(u_k) < self.gamma:
+            # Done to avoid mini-vibrations: close to infinite acceleration
+            # Alternatively filter the inputs/add dampening in the first order response.
+            u_k = 0 
+
+        B_k = np.array([[0],
+                        [0], 
+                        [np.cos(self.heading)], 
+                        [np.sin(self.heading)]])
+        ######################
+        # Step 2: Choose A_k #
+        ######################
+        if np.abs(self.omega) > self.gamma:
+            A_k = np.array([[1, 0, np.sin(self.omega*dt)/self.omega, -(1-np.cos(self.omega*dt))/self.omega],
+                          [0, 1, (1-np.cos(self.omega*dt))/self.omega, np.sin(self.omega*dt)/self.omega],
+                          [0, 0, np.cos(self.omega*dt), -np.sin(self.omega*dt)], 
+                          [0, 0, np.sin(self.omega*dt), np.cos(self.omega*dt)]], dtype=np.ndarray)
+        else: # In case omega ~ 0
+            A_k = np.array([[1, 0, dt, 0],
+                          [0, 1, 0, dt],
+                          [0, 0, 1, 0], 
+                          [0, 0, 0, 1]])
+
+        # Step 3: Update state matrix
+        self.X = A_k@self.X + B_k*u_k
+
+        # Step 4: Update omega nad psi (based on theta)
+        theta_next = np.linalg.norm(v_k)*dt*np.tan(self.alpha) / self.d # Turn angle
+        self.heading = self.heading + theta_next # Heading in WCF
+        self.omega = np.linalg.norm(v_k)*np.tan(self.alpha) / self.d
+
+        # Step 5: Update position_center, vertices and sides accordingly.
+        self.originVCF[0], self.originVCF[1] = self.X[0], self.X[1]
+        self.position_center = self.VCTtoWCF(np.array([0, self.length/2]))
+
+        self.vertices = self.vertices_VCTtoWCF(self.verticesVCF)
+        self.sides = [[self.vertices[0], self.vertices[1]],
+                      [self.vertices[1], self.vertices[2]],
+                      [self.vertices[2], self.vertices[3]],
+                      [self.vertices[3], self.vertices[0]]]
+        # Bug: Needs to update the sides as well!
+        self.lines = self.eval_lines(self.sides)
+
+    def one_step_algorithm_3(self, alpha_ref, v_ref, dt):
+        """
+        Running one step of the update algorithm.
+        This differs from one_step_algorithm_2 by adding the ability to alter
+          a lot of the parameters. This allows for simulating error in the vehicle model.
         """
         ####################################
         # Step 0: Are we reversing or not? #

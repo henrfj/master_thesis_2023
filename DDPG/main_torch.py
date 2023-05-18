@@ -323,7 +323,7 @@ def v23_training(episodes=5000, episode_s=20, sim_dt=0.1, decision_dt=0.5, save_
     plotLearning(score_history, plot_folder, window=100)
 
 def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
-                        environment_selection="four_walls", add_noise=True, collision_rejection=False, include_collision_state = False,
+                        environment_selection="four_walls", add_noise=True, collision_rejection=False, include_collision_state = False, reset_after_collision_avoidance = True,
                         store_plot_data=None, flip_noise_off=False, flip_episode=None):
     """ 
     As opposed to _1, this training does -no- training of the hallucination, but allows collision courses to pass!
@@ -344,7 +344,6 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
     env = MPC_environment_v40(sim_dt=sim_dt, decision_dt=decision_dt, render=False, v_max=v_max, v_min=v_min,
 	       alpha_max=alpha_max, tau_steering=tau_steering, tau_throttle=tau_throttle, horizon=200, edge=150,
 		   episode_s=60, mpc=True, environment_selection=environment_selection)
-    collision_history = np.zeros((episodes,))
     agent = MPC_Agent(alpha=0.000025, beta=0.00025, input_dims=[42], tau=0.1, env=env, 
             batch_size=64,  layer1_size=400, layer2_size=300, n_actions=2, chkpt_dir=save_folder)
     
@@ -356,26 +355,28 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
     # Sets certain parameters
     trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
     # Book-keeping during training
-    score_history = []
-    actual_collisions_during_training = 0
+    score_history = np.zeros((episodes,))
+    collision_history = np.zeros((episodes,))
+    collisions_avoided_during_training = 0
     ###############################################################################################################
     """ One episode"""
     for e in range(episodes):
+        # Should noice be turned off?
         if flip_noise_off and e == flip_episode:
             add_noise = False
-
+        # Readying for a new episode
         current_IRL_state = env.reset()
         done = False
         score = 0
         episode_lenght = 0
-        update_vision=True # need to make initial update
-        rejected_trajectories = 0
-        """ One decision_dt """
+        update_vision = True # need to make initial update
+        reset_episode_flag = False
+        # Start the episode
         while not done:
             #################################
             # If vision box needs an update #
             #################################
-            if update_vision: 
+            while update_vision and not reset_episode_flag: 
                 # Do not allow colliding trajectories
                 # 'Collided' deciedes if the trajectory is going to collide.
                 # Should "include collision state = TRUE" be included? to learn from collisions?"
@@ -383,65 +384,56 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
                     env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_stop=collision_rejection, include_collision_state=include_collision_state)
                 #
                 update_vision = False
+                # There was a collision in the plan
+                if include_collision_state and collided:
+                    # 1
+                    reward = -500 # Collision
+                    s_next = states.pop()
+                    action = action_queue.pop()
+                    agent.remember(state=states[-1], action=action, reward=reward,
+                                new_state=s_next, done=int(True))
+                    agent.learn()
+                    # 2
+                    discount = agent.gamma
+                    while len(states)>1:
+                        reward *= discount
+                        s_next = states.pop()
+                        action = action_queue.pop()
+                        agent.remember(state=states[-1], action=action, reward=reward,
+                                new_state=s_next, done=int(True))
+                        agent.learn()
 
-            ####################################
-            # Do we need to update trajectory? #
-            ####################################
-            real_circogram = env.SC
-            _, d2, _, _, _ = real_circogram
-            d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
-            update_vision = env.update_vision(len(action_queue), d2, d2_halu)
-
-            #############################
-            # Select and execute action #
-            #############################
-            act = action_queue.popleft()
-            """ NOTE during env.step, the SC for the new step is calculated! """
-            """ NOTE:
-            Used to feed it with **actual** states for training! Bad!
-            Will cause it to predict and learn on different looking states :O"""
-            ######################################
-            # In case of safe collision training #
-            ######################################
-            if include_collision_state and collided and len(action_queue)==1:
-                #####
-                # 1 #
-                #####
-                # The next two actions will take us to a collision state :(
-                print("Try to dodge collision!")
-                # Try to avoid the collision: should maybe to this sooner :(
-                next_IRL_state, reward, done, _ = env.step([0, 0])
-
-                agent.remember(state=halu_state[0], action=act, reward=reward,
-                                    new_state=halu_state[1], done=int(done))
-                agent.learn()
-
-                #####
-                # 2 #
-                #####
-                #This next action will take us to a collision state :'(
-                act = action_queue.popleft()
-                #
-                next_IRL_state, _, _, real_info = env.step([0, 0])
-				# Still need to punish the sequence!
-                reward = -500
+                    
+                    # Reset the episode
+                    if reset_after_collision_avoidance:
+                        update_vision = False
+                        reset_episode_flag = True
+                    # Try again
+                    else:
+                        update_vision = True
+            
+            if reset_episode_flag:
                 done = True
-                # Remember and learn from mistakes
-                agent.remember(state=halu_state[1], action=act, reward=reward,
-                                    new_state=halu_state[2], done=int(done))
-                agent.learn()
-                
-                # Did we dodge it?
-                info = "Collision dodge attempt: " + real_info
-                # We *might* have been to late tho.
-                if real_info == "'Collided'":
-                    actual_collisions_during_training +=1
-                    collision_history[e] = 1
+                reward = -500
+                info = "'Avoided collision plan"
+                collisions_avoided_during_training += 1
+            else:
+                ####################################
+                # Do we need to update trajectory? #
+                ####################################
+                real_circogram = env.SC
+                _, d2, _, _, _ = real_circogram
+                d2_halu = halu_d2s.popleft() # Retrieve believed/halucinated SC from trajectory
+                update_vision = env.update_vision(len(action_queue), d2, d2_halu)
 
-            ###################
-            # Normal training #
-            ###################
-            else: 
+                #############################
+                # Select and execute action #
+                #############################
+                act = action_queue.popleft()
+
+                ###################
+                # Normal training #
+                ###################
                 next_IRL_state, reward, done, info = env.step(act)
                 halu_state = states.popleft()
 
@@ -452,7 +444,6 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
                 # Learn from replay buffer, given batch size
                 agent.learn()
                 if info == "'Collided'":
-                    actual_collisions_during_training +=1
                     collision_history[e] = 1
                 
             ################
@@ -474,7 +465,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             agent.save_models()
         print('episode ', e, 'score %.2f' % score,
             'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
-        print("Rejected trajectories:", rejected_trajectories)
+        print("Rejected trajectories:", collisions_avoided_during_training)
         ####################################
         if e % 100 == 0:
             plotLearning(score_history, plotting, window=100)
@@ -483,7 +474,6 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
                 np.savetxt('DDPG/plotdata/'+store_plot_data+'_sh.txt', np.asarray(score_history))
     
     plotLearning(score_history, plotting, window=100)
-    print("Actual collisions during training:", actual_collisions_during_training)
     np.savetxt('DDPG/plotdata/'+store_plot_data+'_ch.txt', collision_history, fmt='%d')
     np.savetxt('DDPG/plotdata/'+store_plot_data+'_sh.txt', np.asarray(score_history))
 
@@ -520,15 +510,20 @@ if __name__ =="__main__":
     #            plot_file = 'DDPG/plots/openfield_v22_naples_plotty.png', environment="naples_street", add_noise=True, flip_noise_off=True, flip_episode=50000)
 
     
-    
     # For plotting
-    #v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_plotty.png', save_folder="DDPG/checkpoints/v40_fw_plotty", loadfolder=None,
-    #                    environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True,
-    #                    store_plot_data="v40_fw", flip_noise_off=True, flip_episode=50000)
+    v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_reset.png', save_folder="DDPG/checkpoints/v40_fw_reset", loadfolder=None,
+                        environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
+                        store_plot_data="v40_fw_reset", flip_noise_off=True, flip_episode=35000)
     
-    v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_naples_plotty.png', save_folder="DDPG/checkpoints/v40_naples_plotty", loadfolder=None,
-                        environment_selection="naples_street", add_noise=True, collision_rejection=True, include_collision_state = True,
-                        store_plot_data="v40_naples", flip_noise_off=True, flip_episode=50000)
+    v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_not_reset.png', save_folder="DDPG/checkpoints/v40_fw_not_reset", loadfolder=None,
+                        environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
+                        store_plot_data="v40_fw_not_reset", flip_noise_off=True, flip_episode=35000)
+    
+    
+    
+    #v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_naples_plotty.png', save_folder="DDPG/checkpoints/v40_naples_plotty", loadfolder=None,
+    #                    environment_selection="naples_street", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
+    #                    store_plot_data="v40_naples", flip_noise_off=True, flip_episode=50000)
 
 
     #####################################################################################################################
