@@ -288,26 +288,48 @@ class Vehicle(Object):
         # Bug: Needs to update the sides as well!
         self.lines = self.eval_lines(self.sides)
 
-    def one_step_algorithm_3(self, alpha_ref, v_ref, dt):
+    def one_step_algorithm_3(self, action, dt, params = [0, 0, 0, 0, 0, 0]):
         """
         Running one step of the update algorithm.
         This differs from one_step_algorithm_2 by adding the ability to alter
           a lot of the parameters. This allows for simulating error in the vehicle model.
+          residuals = [tau_v, tau_alpha, k_max, k_min, c_max, d]
         """
+
+        ##########################
+        # Step 0: set parameters #
+        ##########################
+        #
+        tau_throttle = params[0] # Time constant throttle (Accelerating, not breaking)
+        tau_steering = params[1] # Time constant Steering (Turning)
+        K_a = dt / tau_steering # Gain parameter
+        K_v = dt / tau_throttle # Gain parameter
+        #
+        k_max = params[2]
+        k_min = params[3]
+        c_max = params[4]
+        #
+        d = params[5]
+        #################################
+        # Step 1: signal -> references? #
+        #################################
+        throttle_signal = action[0]
+        if throttle_signal >= 0:
+            v_ref = k_max*throttle_signal
+        else:
+            v_ref = -k_min*throttle_signal
+        steering_signal = action[1]
+        alpha_ref = c_max*steering_signal
         ####################################
         # Step 0: Are we reversing or not? #
         ####################################
-        # TODO: All bugs connected to directions.
-        # >>>>>> Sometimes, it actually runs backwards even if v_ref > 0
-        # >>>>>> Then, we get ~infinite values in the update function below.
+        # Focus direction is where the vehicle is accelarating
         if v_ref > 0:
             self.focus_direction = 1
         elif v_ref < 0:
             self.focus_direction = -1
         else: self.focus_direction = 0
-
-
-        # TODO: rather set based on v_ref, instead of actual v - might just be sliding.
+        # Actual direction is where the vehicle is going
         v_k = self.X[2:,:] # Current speed from state matrix
         v_k_VCF = self.WCF_rotate_VCF(v_k) # rotate to VCF
         if v_k_VCF[1, 0]>0: # Driving down y axis or not.
@@ -316,18 +338,17 @@ class Vehicle(Object):
             self.actual_direction=-1
         else:
             self.actual_direction=0
-    
         #####################################
         # Step 1: update u, alpha, find B_k #
         #####################################
 
-        self.alpha = self.alpha + self.K_a * (alpha_ref - self.alpha)
-        u_k = self.K_v * (v_ref-self.actual_direction*np.linalg.norm(v_k))
+        self.alpha = self.alpha + K_a * (alpha_ref - self.alpha)
+        u_k = K_v * (v_ref-self.actual_direction*np.linalg.norm(v_k))
 
         # Small value problem.
         if np.abs(u_k) < self.gamma:
             # Done to avoid mini-vibrations: close to infinite acceleration
-            # Alternatively filter the inputs/add dampening in the first order response.
+            # NOTE the alternative is to filter the inputs/add dampening in the first order response.
             u_k = 0 
 
         B_k = np.array([[0],
@@ -352,9 +373,9 @@ class Vehicle(Object):
         self.X = A_k@self.X + B_k*u_k
 
         # Step 4: Update omega nad psi (based on theta)
-        theta_next = np.linalg.norm(v_k)*dt*np.tan(self.alpha) / self.d # Turn angle
+        theta_next = np.linalg.norm(v_k)*dt*np.tan(self.alpha) / d # Turn angle
         self.heading = self.heading + theta_next # Heading in WCF
-        self.omega = np.linalg.norm(v_k)*np.tan(self.alpha) / self.d
+        self.omega = np.linalg.norm(v_k)*np.tan(self.alpha) / d
 
         # Step 5: Update position_center, vertices and sides accordingly.
         self.originVCF[0], self.originVCF[1] = self.X[0], self.X[1]

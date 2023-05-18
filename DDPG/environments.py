@@ -1633,7 +1633,7 @@ class MPC_environment_v40(gym.Env): #
 		if value:
 			return True
 
-	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True, collision_stop=False, include_collision_state=False):
+	def hallucinate(self, trajectory_length, sim_dt, decision_dt, agent, add_noise=True, collision_stop=False, include_collision_state=False, goal_stop = True):
 		""" This is where the vehucle hallucinates the future, predicting and avoiding crashes.
 		parameters:
 		- add_noise: should noise be added to the actions taken by the agent?
@@ -1716,9 +1716,11 @@ class MPC_environment_v40(gym.Env): #
 			#################
 			# Goal reached! #
 			#################
-			dist = np.linalg.norm(goal_CCF)
-			if dist < self.goal_threshold:  # some threshold
-				return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
+			# Stop when current state is a goal state
+			if goal_stop:
+				dist = np.linalg.norm(goal_CCF)
+				if dist < self.goal_threshold:  # some threshold
+					return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 			############################################
 			# If no termination, choose **one** action #
 			############################################

@@ -350,28 +350,32 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
     if loadfolder:
         print("Loading model from:'" + loadfolder+"'")
         agent.load_models(load_directory=loadfolder)
-    #np.random.seed(0)
     ###############################################################################################################
     # Sets certain parameters
     trajectory_length = np.int32(3.0/decision_dt) # to get 3 second trajectories
     # Book-keeping during training
-    score_history = np.zeros((episodes,))
+    score_history = []
     collision_history = np.zeros((episodes,))
-    collisions_avoided_during_training = 0
+    rejection_history = np.zeros((episodes,))
     ###############################################################################################################
     """ One episode"""
     for e in range(episodes):
         # Should noice be turned off?
         if flip_noise_off and e == flip_episode:
             add_noise = False
-        # Readying for a new episode
+        ##############################
+        # Readying for a new episode #
+        ##############################
         current_IRL_state = env.reset()
         done = False
         score = 0
         episode_lenght = 0
         update_vision = True # need to make initial update
         reset_episode_flag = False
-        # Start the episode
+        rejected_trajectories = 0
+        #####################
+        # Start the episode #
+        #####################
         while not done:
             #################################
             # If vision box needs an update #
@@ -381,11 +385,13 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
                 # 'Collided' deciedes if the trajectory is going to collide.
                 # Should "include collision state = TRUE" be included? to learn from collisions?"
                 action_queue, _, _, halu_d2s, states, collided = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_stop=collision_rejection, include_collision_state=include_collision_state)
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, goal_stop=False,
+                                     collision_stop=collision_rejection, include_collision_state=include_collision_state)
                 #
                 update_vision = False
                 # There was a collision in the plan
                 if include_collision_state and collided:
+                    rejected_trajectories += 1
                     # 1
                     reward = -500 # Collision
                     s_next = states.pop()
@@ -415,8 +421,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
             if reset_episode_flag:
                 done = True
                 reward = -500
-                info = "'Avoided collision plan"
-                collisions_avoided_during_training += 1
+                info = "'Avoid and reset episode'"
             else:
                 ####################################
                 # Do we need to update trajectory? #
@@ -443,9 +448,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
                                     new_state=halu_state[0], done=int(done))
                 # Learn from replay buffer, given batch size
                 agent.learn()
-                if info == "'Collided'":
-                    collision_history[e] = 1
-                
+
             ################
             # Book-keeping #
             ################
@@ -457,24 +460,31 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
         ####################################
         ## BOOK-Keeping from the training ##
         ####################################
+        if info == "'Collided'":
+            collision_history[e] = 1
         score_history.append(score)
+        rejection_history[e] = rejected_trajectories
+        
         # Store best average models
         avg_score = np.mean(score_history[-100:])
         if avg_score > best_score:
             best_score = avg_score
             agent.save_models()
+        # Print some data
         print('episode ', e, 'score %.2f' % score,
             'trailing 100 games avg %.3f' % np.mean(score_history[-100:]), "ep_lenght:", episode_lenght, "info:", info)
-        print("Rejected trajectories:", collisions_avoided_during_training)
+        print("Rejected trajectories:", rejected_trajectories, "/", int(np.sum(rejection_history)))
         ####################################
         if e % 100 == 0:
             plotLearning(score_history, plotting, window=100)
             if store_plot_data:
                 np.savetxt('DDPG/plotdata/'+store_plot_data+'_ch.txt', collision_history, fmt='%d')
+                np.savetxt('DDPG/plotdata/'+store_plot_data+'_rh.txt', np.asarray(rejection_history))
                 np.savetxt('DDPG/plotdata/'+store_plot_data+'_sh.txt', np.asarray(score_history))
     
     plotLearning(score_history, plotting, window=100)
     np.savetxt('DDPG/plotdata/'+store_plot_data+'_ch.txt', collision_history, fmt='%d')
+    np.savetxt('DDPG/plotdata/'+store_plot_data+'_rh.txt', np.asarray(rejection_history))
     np.savetxt('DDPG/plotdata/'+store_plot_data+'_sh.txt', np.asarray(score_history))
 
 
@@ -511,9 +521,9 @@ if __name__ =="__main__":
 
     
     # For plotting
-    v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_reset.png', save_folder="DDPG/checkpoints/v40_fw_reset", loadfolder=None,
-                        environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
-                        store_plot_data="v40_fw_reset", flip_noise_off=True, flip_episode=35000)
+    #v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_reset.png', save_folder="DDPG/checkpoints/v40_fw_reset", loadfolder=None,
+    #                    environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
+    #                    store_plot_data="v40_fw_reset", flip_noise_off=True, flip_episode=35000)
     
     v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_not_reset.png', save_folder="DDPG/checkpoints/v40_fw_not_reset", loadfolder=None,
                         environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
