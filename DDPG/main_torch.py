@@ -324,7 +324,7 @@ def v23_training(episodes=5000, episode_s=20, sim_dt=0.1, decision_dt=0.5, save_
 
 def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/mpc_v40.png', save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22_5",
                         environment_selection="four_walls", add_noise=True, collision_rejection=False, include_collision_state = False, reset_after_collision_avoidance = True,
-                        store_plot_data=None, flip_noise_off=False, flip_episode=None):
+                        store_plot_data=None, flip_noise_off=False, flip_episode=None, add_disturbance=None):
     """ 
     As opposed to _1, this training does -no- training of the hallucination, but allows collision courses to pass!
     Could also be called the "IRL" trainer!
@@ -439,7 +439,7 @@ def v40_MPC_IRL_training(episodes=5000, sim_dt=0.05, decision_dt=0.5, plotting =
                 ###################
                 # Normal training #
                 ###################
-                next_IRL_state, reward, done, info = env.step(act)
+                next_IRL_state, reward, done, info = env.step(act, add_disturbance=add_disturbance)
                 halu_state = states.popleft()
 
                 # Remember the transition
@@ -525,9 +525,9 @@ if __name__ =="__main__":
     #                    environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
     #                    store_plot_data="v40_fw_reset", flip_noise_off=True, flip_episode=35000)
     
-    v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_not_reset.png', save_folder="DDPG/checkpoints/v40_fw_not_reset", loadfolder=None,
-                        environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
-                        store_plot_data="v40_fw_not_reset", flip_noise_off=True, flip_episode=35000)
+    #v40_MPC_IRL_training(episodes=70000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_fw_not_reset.png', save_folder="DDPG/checkpoints/v40_fw_not_reset", loadfolder=None,
+    #                    environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
+    #                    store_plot_data="v40_fw_not_reset", flip_noise_off=True, flip_episode=35000)
     
     
     
@@ -537,7 +537,18 @@ if __name__ =="__main__":
 
 
     #####################################################################################################################
+    # From pre-trained model, adding a little disturbance: DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
+    v40_MPC_IRL_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_no_dist.png', save_folder="DDPG/checkpoints/v40_v22_fw_no_dist", loadfolder="DDPG/checkpoints/v22_fw_plotty",
+                        environment_selection="four_walls", add_noise=False, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
+                        store_plot_data="v40_v22_fw_no_dist", flip_noise_off=False, flip_episode=None, add_disturbance=None)
 
+
+    v40_MPC_IRL_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_dist.png', save_folder="DDPG/checkpoints/v40_v22_fw_dist", loadfolder="DDPG/checkpoints/v22_fw_plotty",
+                        environment_selection="four_walls", add_noise=False, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
+                        store_plot_data="v40_v22_fw_dist", flip_noise_off=False, flip_episode=None, add_disturbance=[])
+
+
+    #####################################################################################################################
     # Dynamic obstacles!
     #v23_training(episodes=50000, episode_s=20, sim_dt=0.1,decision_dt=0.5, save_folder="DDPG/checkpoints/v23",
     #              loadfolder="DDPG/checkpoints/v22", plot_folder = 'DDPG/plots/openfield_v23.png', add_noise=False)

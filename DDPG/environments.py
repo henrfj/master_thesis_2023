@@ -1638,7 +1638,7 @@ class MPC_environment_v40(gym.Env): #
 		parameters:
 		- add_noise: should noise be added to the actions taken by the agent?
 		- collision_stop: 
-		- 
+		- add_disturbance = DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d] -> determines what distubances to add to each parameter. If == NONE it wont be any
 		"""
 		times = np.int32(decision_dt/sim_dt)
 		##############################################
@@ -1730,8 +1730,12 @@ class MPC_environment_v40(gym.Env): #
 			previous_throttle_signal = act[0]
 			previous_steering_signal = act[1]
 			prev_pos = current_pos
-			# Translate action signals to steering signals
-			""" TODO: add this to its own function """
+
+			
+			#################################################################
+			# To avoid numerical instability: run multiple small timesteps! #
+			#################################################################
+			# Translate from signals to actions
 			throttle_signal = act[0]
 			if throttle_signal >= 0:
 				v_ref_t = self.v_max*throttle_signal
@@ -1739,23 +1743,26 @@ class MPC_environment_v40(gym.Env): #
 				v_ref_t = -self.v_min*throttle_signal
 			steering_signal = act[1]
 			alpha_ref_t = self.alpha_max*steering_signal
-			#################################################################
-			# To avoid numerical instability: run multiple small timesteps! #
-			#################################################################
+			#
 			for _ in range(times):
+				#
 				halu_car.one_step_algorithm_2(alpha_ref=alpha_ref_t, v_ref=v_ref_t, dt=sim_dt)
 				sim_trajectory.append(halu_car.position_center)
+				#
 			decision_trajectory.append(halu_car.position_center)
-		
+			#
 		return action_queue, decision_trajectory, sim_trajectory, halu_d2s, states, collided
 	
-	def step(self, action):
+	def step(self, action, add_disturbance=None):
 		"""Execute one (decision) time step within the environment.
 			- Unlike the halucinated situation, this is actual moving and learning.
 			- In theory, The vehicle shouldn't collide with these steps; as trajectories are not allowed to collide!
 				- In practice however, collisions could happen, and are accounted for.
 		"""
-		# TODO; use step function of v22
+		# Call upon the vehicle step action
+		times = np.int32(self.decision_dt/self.sim_dt)
+		if self.will_render:
+			self.real_trajectory = []
 		# Translate action signals to steering signals
 		throttle_signal = action[0]
 		if throttle_signal >= 0:
@@ -1764,15 +1771,23 @@ class MPC_environment_v40(gym.Env): #
 			v_ref = -self.v_min*throttle_signal
 		steering_signal = action[1]
 		alpha_ref = self.alpha_max*steering_signal
-
-		# Call upon the vehicle step action
-		times = np.int32(self.decision_dt/self.sim_dt)
-		if self.will_render:
-			self.real_trajectory = []
-		# NOTE this avoids numerical instability, by using sim_dt to simulate actions taken each decicion_dt
+		# The check if goal was reached during simulation
 		goal_was_reached = False
+		# NOTE this avoids numerical instability, by using sim_dt to simulate actions taken each decicion_dt
 		for _ in range(times):
-			self.vehicle.one_step_algorithm_2(alpha_ref, v_ref, dt=self.sim_dt)
+			if add_disturbance: 
+				# 1 Add disturbances
+				tau_v = self.vehicle.tau_throttle + add_disturbance[0]
+				tau_alpha = self.vehicle.tau_steering + add_disturbance[1]
+				k_max = self.v_max + add_disturbance[2]
+				k_min = self.v_min + add_disturbance[3]
+				c_max = self.alpha_max + add_disturbance[4]
+				d = self.vehicle.d + add_disturbance[5]
+				self.vehicle.one_step_algorithm_3(action=action, dt=self.sim_dt, params=[tau_v, tau_alpha, k_max, k_min, c_max, d])
+			else:
+				
+				self.vehicle.one_step_algorithm_2(alpha_ref, v_ref, dt=self.sim_dt)
+			
 			# Check for goal in here!
 			self.goal_CCF = self.vehicle.WCFtoCCF(np.array([self.goal_x, self.goal_y]))
 			dist = np.linalg.norm(self.goal_CCF)

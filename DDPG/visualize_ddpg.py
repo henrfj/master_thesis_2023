@@ -445,7 +445,8 @@ def visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="...",
 
 def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
-                  trajectory_time=3.0, user_controlled=False, add_noise=False, collision_stop=True, include_collision_state=False):
+                  trajectory_time=3.0, user_controlled=False, add_noise=False, collision_stop=True, include_collision_state=False,
+                  goal_stop=True, add_disturbance=None):
     """
         - loadfolder="DDPG/checkpoints/v22"; holds a good starting point, based on a basic DDPG algorithm
         - loadfolder="DDPG/checkpoints/v40"; is a MPC-specifically trained agent to be visualized
@@ -480,8 +481,9 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
             d1, d2, _, P2, _ = real_circogram
             #
             if update_vision:
-                action_queue, decision_trajectory, sim_trajectory, halu_d2s, _, collided = \
-                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_stop=collision_stop, include_collision_state=include_collision_state)
+                action_queue, decision_trajectory, sim_trajectory, halu_d2s, halu_states, collided = \
+                    env.hallucinate(trajectory_length, sim_dt, decision_dt, agent, add_noise=add_noise, collision_stop=collision_stop, include_collision_state=include_collision_state,
+                                    goal_stop=goal_stop)
                 # TODO: add rejection to collision trajectories, even in display
 
  
@@ -524,7 +526,7 @@ def visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v4
                     #print("RIGHT")
                     act[1] = 1
 
-            next_state, _, done, info = env.step(act)
+            next_state, _, done, info = env.step(act, add_disturbance=add_disturbance)
 
         
             ########################
@@ -664,7 +666,8 @@ if __name__ == "__main__":
 
     # MPC!
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False)
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+    #              add_disturbance=None)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22; smooth driver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
@@ -694,15 +697,30 @@ if __name__ == "__main__":
     
     #############################################
     # Dynamic! Does collide from time to times - but how often?
-    visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
+    #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
+    
     #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23_reverser",
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
     
     # Dynamic v41 environment
     # TODO: use collision_test, to also (Instead?) trigger "update vision" if the trajectory is intersected.
-    visualize_v41(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v23", 
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, trajectory_time = 3.0, 
-                  add_noise=False, collision_stop=False, include_collision_state=True, repeat_forever=True)
+    #visualize_v41(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v23", 
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, trajectory_time = 3.0, 
+    #              add_noise=False, collision_stop=False, include_collision_state=True, repeat_forever=True)
     
+    
+    #############################################
+    # Adding disturbance => DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+                    add_noise=False, collision_stop=True, include_collision_state=False,
+                    goal_stop=True, add_disturbance=[0, 0, 0, 0, 0, 0])
+
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+                    add_noise=False, collision_stop=True, include_collision_state=False,
+                    goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
+    
+    pass
 
