@@ -539,13 +539,14 @@ if __name__ =="__main__":
     #####################################################################################################################
     # From pre-trained model, adding a little disturbance: DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
     v40_MPC_IRL_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_no_dist.png', save_folder="DDPG/checkpoints/v40_v22_fw_no_dist", loadfolder="DDPG/checkpoints/v22_fw_plotty",
-                        environment_selection="four_walls", add_noise=False, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
+                        environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
                         store_plot_data="v40_v22_fw_no_dist", flip_noise_off=False, flip_episode=None, add_disturbance=None)
 
 
-    v40_MPC_IRL_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_dist.png', save_folder="DDPG/checkpoints/v40_v22_fw_dist", loadfolder="DDPG/checkpoints/v22_fw_plotty",
-                        environment_selection="four_walls", add_noise=False, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = False,
-                        store_plot_data="v40_v22_fw_dist", flip_noise_off=False, flip_episode=None, add_disturbance=[])
+    #v40_MPC_IRL_training(episodes=10000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_dist.png', save_folder="DDPG/checkpoints/v40_v22_fw_dist", loadfolder="DDPG/checkpoints/v22_fw_plotty",
+    #                    environment_selection="four_walls", add_noise=False, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
+    #                    store_plot_data="v40_v22_fw_dist", flip_noise_off=False, flip_episode=None, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
+
 
 
     #####################################################################################################################

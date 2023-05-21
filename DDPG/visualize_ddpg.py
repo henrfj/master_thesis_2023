@@ -663,6 +663,9 @@ if __name__ == "__main__":
     #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn", # No noise in training! Very smooth!
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street")
 
+    #visualize_v22(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_fw_plotty", # Is used for plotting, and training v40's
+    #          v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls")
+
 
     # MPC!
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
@@ -712,12 +715,19 @@ if __name__ == "__main__":
     
     #############################################
     # Adding disturbance => DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
-                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
-                    add_noise=False, collision_stop=True, include_collision_state=False,
-                    goal_stop=True, add_disturbance=[0, 0, 0, 0, 0, 0])
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+    #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+    #                add_noise=False, collision_stop=True, include_collision_state=False,
+    #                goal_stop=True, add_disturbance=[0, 0, 0, 0, 0, 0])
 
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+    #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+    #                add_noise=False, collision_stop=True, include_collision_state=False,
+    #                goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
+    
+    ### TRAINED FOR DISTURVANCE ###
+
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_v22_fw_dist", # just using v22
                     v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
                     add_noise=False, collision_stop=True, include_collision_state=False,
                     goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
