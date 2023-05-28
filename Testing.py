@@ -1457,7 +1457,7 @@ def test_milkman_smarter_SC_update():
 
 if __name__ == "__main__":
     #test_user_input()
-    test_visual_box()
+    #test_visual_box()
     #test_visual_box_update_rule()
     """
     What we learned: 
@@ -1466,8 +1466,8 @@ if __name__ == "__main__":
     """
     #test_pre_trained_MPC_agent() # # vbox does not update
     #test_pre_trained_with_update_vbox() 
-    #while True:
+    while True:
     #    #test_milkman_full() # using sim_dt = decision_dt for numerical stability
     #    #test_milkman_smart_SC_update() # Also using sim_dt = decision_dt, but(!) waiting longer between SC update
-    #    test_milkman_smarter_SC_update() # Uses decision_dt>>sim_dt, and only doing SC update once every decision update!
+        test_milkman_smarter_SC_update() # Uses decision_dt>>sim_dt, and only doing SC update once every decision update!
     ##test_numerical_stability()

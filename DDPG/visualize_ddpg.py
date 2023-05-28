@@ -700,8 +700,8 @@ if __name__ == "__main__":
     
     #############################################
     # Dynamic! Does collide from time to times - but how often?
-    #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
+    visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
     
     #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23_reverser",
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
