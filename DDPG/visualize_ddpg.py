@@ -676,7 +676,7 @@ if __name__ == "__main__":
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, collision_rejection=True)
     
-    # GOOD STUFF
+    # GOOD STUFF: illustrates the strenghts of v40, while using v22 directly.
     #visualize_v40(sim_dt=0.05, decision_dt=0.25, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples_nn", # Using v22_nn; in naples environment - GOOD
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street", trajectory_time = 10.0,
     #                add_noise=False, collision_stop=True, include_collision_state=False)
@@ -685,7 +685,7 @@ if __name__ == "__main__":
     
     # IRL trainer of v40 - from scratch!!!!!!!!!!!!!!! # Suprise surprise! IT WORKS!!! BUT 856 Collisions in training!
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="None", loadfolder="DDPG/checkpoints/v40_IRL_fw", 
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, 
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 5.0, 
     #              add_noise=False, collision_stop=True, include_collision_state=False)
     
     # Score looks terrible - it looks terrible
@@ -700,8 +700,8 @@ if __name__ == "__main__":
     
     #############################################
     # Dynamic! Does collide from time to times - but how often?
-    visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
-                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
+    #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23",
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
     
     #visualize_v23(sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v23_reverser",
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, user_controlled=False)
@@ -715,18 +715,17 @@ if __name__ == "__main__":
     
     #############################################
     # Adding disturbance => DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
-    #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
-    #                add_noise=False, collision_stop=True, include_collision_state=False,
-    #                goal_stop=True, add_disturbance=[0, 0, 0, 0, 0, 0])
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+                    add_noise=False, collision_stop=True, include_collision_state=False,
+                    goal_stop=True, add_disturbance=[-0.1, -0.1, -1, -1, 0.5, 1], trajectory_time=10.0)
 
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
     #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
     #                add_noise=False, collision_stop=True, include_collision_state=False,
     #                goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
     
-    ### TRAINED FOR DISTURVANCE ###
-
+    ### TRAINED FOR disturbance6 ###
     visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_v22_fw_dist", # just using v22
                     v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
                     add_noise=False, collision_stop=True, include_collision_state=False,

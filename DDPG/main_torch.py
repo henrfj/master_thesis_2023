@@ -217,7 +217,7 @@ def v21_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, chkpt_dir="DDPG/chec
     plotLearning(score_history, filename, window=100)
 
 def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/checkpoints/v22_5", loadfolder="DDPG/checkpoints/v22", plot_file = 'DDPG/plots/openfield_v22.png', environment="four_walls", add_noise=True,
-                  store_plot_data=None, flip_noise_off=False, flip_episode=None):
+                  store_plot_data=None, flip_noise_off=False, flip_episode=None, add_disturbance=None, disturbance_episode=None):
     """
     Here, we added knowledge of previous action, and punish for jerk.
     """
@@ -242,7 +242,10 @@ def v22_training(episodes=5000, sim_dt=0.1,decision_dt=0.1, save_folder="DDPG/ch
         episode_lenght = 0
         while not done:
             act = agent.choose_action(obs, add_noise=add_noise)
-            new_state, reward, done, info = env.step(act)
+            if add_disturbance and i > disturbance_episode:
+                new_state, reward, done, info = env.step(act, add_disturbance=add_disturbance)
+            else:
+                new_state, reward, done, info = env.step(act)
             agent.remember(obs, act, reward, new_state, int(done))
             agent.learn()
             score += reward
@@ -535,6 +538,16 @@ if __name__ =="__main__":
     #                    environment_selection="naples_street", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
     #                    store_plot_data="v40_naples", flip_noise_off=True, flip_episode=50000)
 
+    ################### To get plot data 2.0 ##############
+    # EXP 1
+    #v22_training(episodes=50000, sim_dt=0.05,decision_dt=0.5, save_folder="DDPG/checkpoints/v22_fw_plotty", loadfolder=None, plot_file = 'DDPG/plots/openfield_v22.png', environment="four_walls", add_noise=True,
+    #              store_plot_data='exp_1_v22', flip_noise_off=True, flip_episode=40000)
+    
+
+    # EXP 3
+    v22_training(episodes=10000, sim_dt=0.05,decision_dt=0.5, save_folder="DDPG/checkpoints/exp_3", loadfolder="DDPG/checkpoints/v22", plot_file = 'DDPG/plots/exp_3.png', environment="four_walls", add_noise=False,
+                    store_plot_data='exp_3_v22', flip_noise_off=False, flip_episode=None, add_disturbance=[-0.1, -0.1, -1, -1, 0.5, 1], disturbance_episode=1000)
+
 
     #####################################################################################################################
     # From pre-trained model, adding a little disturbance: DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
@@ -543,9 +556,9 @@ if __name__ =="__main__":
     #                    store_plot_data="v40_v22_fw_no_dist", flip_noise_off=False, flip_episode=None, add_disturbance=None)
 
 
-    v40_MPC_IRL_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_dist_2.png', save_folder="DDPG/checkpoints/v40_v22_fw_dist_2", loadfolder="DDPG/checkpoints/v40_v22_fw_dist",
-                        environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
-                        store_plot_data="v40_v22_fw_dist_2", flip_noise_off=True, flip_episode=25000, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
+    #v40_MPC_IRL_training(episodes=50000, sim_dt=0.05, decision_dt=0.5, plotting = 'DDPG/plots/v40_v22_fw_dist_2.png', save_folder="DDPG/checkpoints/v40_v22_fw_dist_2", loadfolder="DDPG/checkpoints/v40_v22_fw_dist",
+    #                    environment_selection="four_walls", add_noise=True, collision_rejection=True, include_collision_state = True, reset_after_collision_avoidance = True,
+    #                    store_plot_data="v40_v22_fw_dist_2", flip_noise_off=True, flip_episode=25000, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
 
 
 

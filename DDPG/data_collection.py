@@ -5,7 +5,7 @@ from environments import ClosedField_v22, MPC_environment_v40
 import sys
 from tqdm import tqdm
 
-def data_v22(episodes = 10000, sim_dt=0.05, decision_dt=0.5, folder="...",
+def data_v22(episodes=10000, disturbance_ep=1000, add_disturbance=None, sim_dt=0.05, decision_dt=0.5, folder="...",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
                   store_run_data=None):
 
@@ -32,7 +32,10 @@ def data_v22(episodes = 10000, sim_dt=0.05, decision_dt=0.5, folder="...",
         # So to get realtime, we need to limit ourselves to 2 fps...
         while not done:
             act = agent.choose_action(obs, add_noise=False)
-            new_state, reward, done, info = env.step(act)
+            if add_disturbance and e > disturbance_ep:
+                new_state, reward, done, info = env.step(act, add_disturbance=add_disturbance)
+            else:
+                new_state, reward, done, info = env.step(act, add_disturbance=None)
             obs = new_state
             score += reward
         
@@ -44,7 +47,7 @@ def data_v22(episodes = 10000, sim_dt=0.05, decision_dt=0.5, folder="...",
     np.savetxt('DDPG/rundata/'+store_run_data+'_sh.txt', np.asarray(score_history))
 
 
-def data_v40(episodes = 10000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
+def data_v40(episodes = 10000, disturbance_ep=1000, add_disturbance=None, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
                   v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
                   trajectory_time=3.0, add_noise=False, collision_stop=True, include_collision_state=False, store_run_data=None):
     """
@@ -103,9 +106,13 @@ def data_v40(episodes = 10000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/c
                 act = [0, 0]
             else:
                 act = action_queue.popleft()
-            next_state, reward, done, info = env.step(act)
 
-        
+                if add_disturbance and e > disturbance_ep:
+                    next_state, reward, done, info = env.step(act, add_disturbance=add_disturbance)
+                else:
+                    next_state, reward, done, info = env.step(act, add_disturbance=None)
+            #next_state, reward, done, info = env.step(act)
+
             ########################
             # End of state actions #
             ########################
@@ -233,6 +240,15 @@ if __name__ =="__main__":
     #data_v22(episodes = 500, sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22_naples_nn",
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="naples_street",
     #              store_run_data="v22_naples_data")
+
+    # EXP 2
+    #data_v22(episodes = 10000, add_disturbance=[-0.1, -0.1, -1, -1, 0.5, 1], disturbance_ep = 1000, sim_dt=0.05, decision_dt=0.5, folder="DDPG/checkpoints/v22",
+    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
+    #              store_run_data="exp_2_rundata")
+    
+    data_v40(episodes = 10000, add_disturbance=[-0.1, -0.1, -1, -1, 0.5, 1], disturbance_ep = 1000, sim_dt=0.05, decision_dt=0.5, save_folder="", loadfolder="DDPG/checkpoints/v40_IRL_fw",
+              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
+              trajectory_time=3.0, add_noise=False, collision_stop=False, include_collision_state=True, store_run_data="exp_2_PDRL")
     
     #######
     # v40 #
@@ -249,9 +265,9 @@ if __name__ =="__main__":
     ############################
     # v40 learning disturbance #
     ############################
-    v40_only_learn_env(episodes = 5000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
-                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
-                    trajectory_time=3.0, add_noise=False, collision_stop=False, include_collision_state=True, store_run_data="v40_v22_fw_dist_1",
-                    goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
+    #v40_only_learn_env(episodes = 5000, sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22",
+    #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls",
+    #                trajectory_time=3.0, add_noise=False, collision_stop=False, include_collision_state=True, store_run_data="v40_v22_fw_dist_1",
+    #                goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
 
     

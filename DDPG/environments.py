@@ -1274,7 +1274,7 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 
 		return new_state
 
-	def step(self, action):
+	def step(self, action, add_disturbance=None):
 		"""Execute one time step within the environment"""
 
 		# Translate action signals to steering signals
@@ -1292,10 +1292,20 @@ class ClosedField_v22(gym.Env): # THE MILKMAN
 		if self.will_render:
 			self.render_frames = []
 
-
 		goal_was_reached = False
 		for _ in range(times):
-			self.vehicle.one_step_algorithm(alpha_ref, v_ref)
+			if add_disturbance: 
+				# 1 Add disturbances
+				tau_v = self.vehicle.tau_throttle + add_disturbance[0]
+				tau_alpha = self.vehicle.tau_steering + add_disturbance[1]
+				k_max = self.v_max + add_disturbance[2]
+				k_min = self.v_min + add_disturbance[3]
+				c_max = self.alpha_max + add_disturbance[4]
+				d = self.vehicle.d + add_disturbance[5]
+				self.vehicle.one_step_algorithm_3(action=action, dt=self.sim_dt, params=[tau_v, tau_alpha, k_max, k_min, c_max, d])
+			else:
+				
+				self.vehicle.one_step_algorithm_2(alpha_ref, v_ref, dt=self.sim_dt)
 			# For rendering in sim time
 			xpos, ypos = self.vehicle.position_center
 			heading = self.vehicle.heading
