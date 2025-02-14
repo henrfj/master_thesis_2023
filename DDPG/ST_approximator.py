@@ -2,6 +2,9 @@
 State transition (ST) approximator class
 
 - Uses an aritifical neural network to estimate the residuals in the state transition model
+
+WIP - this is not a complete solution.
+
 """
 # ANN
 import tensorflow as tf
