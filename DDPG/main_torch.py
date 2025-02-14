@@ -1,5 +1,5 @@
 from ddpg_torch import Agent, MPC_Agent
-import gym
+import gymnasium as gym
 import numpy as np
 import os
 from collections import deque

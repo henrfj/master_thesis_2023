@@ -5,6 +5,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 
+
+
+disable_cuda=True
+if not T.cuda.is_available() or disable_cuda:
+    print("CPU time")
+    T.set_default_dtype(T.float32)
+    T.set_default_device('cpu')
+
 class OUActionNoise(object):
     def __init__(self, mu, sigma=0.15, theta=.2, dt=1e-2, x0=None):
         self.theta = theta
@@ -95,7 +103,10 @@ class CriticNetwork(nn.Module):
         #self.q.bias.data.uniform_(-f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cuda:1')
+        if disable_cuda:
+            self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        else:
+            self.device = T.device('cuda:0' if T.cuda.is_available() else 'cuda:1')
 
         self.to(self.device)
 
@@ -118,13 +129,23 @@ class CriticNetwork(nn.Module):
         T.save(self.state_dict(), self.checkpoint_file)
 
     def load_checkpoint(self, Verbose=False, load_directory=None):
-        if Verbose:
-            print('... loading checkpoint ...')
-        if load_directory:
-            full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
-            self.load_state_dict(T.load(full_load_directory))
+        if disable_cuda:
+            if Verbose:
+                print('... loading checkpoint ...')
+            if load_directory:
+                full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
+                checkpoint = T.load(full_load_directory, map_location=self.device)
+            else:
+                checkpoint = T.load(self.checkpoint_file, map_location=self.device)
+            self.load_state_dict(checkpoint)
         else:
-            self.load_state_dict(T.load(self.checkpoint_file))
+            if Verbose:
+                print('... loading checkpoint ...')
+            if load_directory:
+                full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
+                self.load_state_dict(T.load(full_load_directory))
+            else:
+                self.load_state_dict(T.load(self.checkpoint_file))
 
 class ActorNetwork(nn.Module):
     def __init__(self, alpha, input_dims, fc1_dims, fc2_dims, n_actions, name,
@@ -162,7 +183,10 @@ class ActorNetwork(nn.Module):
         #self.mu.bias.data.uniform_(-f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cuda:1')
+        if disable_cuda:
+            self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        else:
+            self.device = T.device('cuda:0' if T.cuda.is_available() else 'cuda:1')
 
         self.to(self.device)
 
@@ -186,13 +210,24 @@ class ActorNetwork(nn.Module):
 
 
     def load_checkpoint(self, Verbose=False, load_directory=None):
-        if Verbose:
-            print('... loading checkpoint ...')
-        if load_directory:
-            full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
-            self.load_state_dict(T.load(full_load_directory))
+        if disable_cuda:
+            if Verbose:
+                print('... loading checkpoint ...')
+            if load_directory:
+                full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
+                checkpoint = T.load(full_load_directory, map_location=self.device)
+            else:
+                checkpoint = T.load(self.checkpoint_file, map_location=self.device)
+            self.load_state_dict(checkpoint)
+
         else:
-            self.load_state_dict(T.load(self.checkpoint_file))
+            if Verbose:
+                print('... loading checkpoint ...')
+            if load_directory:
+                full_load_directory = os.path.join(load_directory, self.name+'_ddpg')
+                self.load_state_dict(T.load(full_load_directory))
+            else:
+                self.load_state_dict(T.load(self.checkpoint_file))
 
 class Agent(object):
     def __init__(self, alpha, beta, input_dims, tau, env, gamma=0.99,

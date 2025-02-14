@@ -1,5 +1,5 @@
 from ddpg_torch import MPC_Agent, Agent
-import gym
+import gymnasium as gym
 import numpy as np
 from environments import ClosedField_v22, MPC_environment_v40
 import sys

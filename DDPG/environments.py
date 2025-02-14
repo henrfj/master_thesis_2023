@@ -1,5 +1,5 @@
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 import pygame
 import cv2
@@ -9,12 +9,11 @@ from copy import deepcopy
 
 # My own libraries
 #import a_star_utils as autils
-import sys
-# caution: path[0] is reserved for script path (or '' in REPL)
-sys.path.insert(1, 'C:/Users/henri/Desktop/MASTER_THESIS_2023')
+
 from Vehicle import Vehicle
+
 from Agent import Agent # DC agents
-from DDPG.ddpg_torch import MPC_Agent
+from .ddpg_torch import MPC_Agent
 from limo import Limo
 from visualization import Visualization
 from Object import Object

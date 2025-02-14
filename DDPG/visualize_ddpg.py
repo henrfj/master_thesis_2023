@@ -1,7 +1,8 @@
-from ddpg_torch import MPC_Agent, Agent
-import gym
+#from .ddpg_torch import MPC_Agent, Agent
+from .ddpg_torch import MPC_Agent, Agent
+import gymnasium as gym
 import numpy as np
-from environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, ClosedField_v23_dyna, MPC_environment_v40, MPC_environment_v41
+from .environments import OpenField_v00, OpenField_v01, OpenField_v10, ClosedField_v20, ClosedField_v21, ClosedField_v22, ClosedField_v23_dyna, MPC_environment_v40, MPC_environment_v41
 import pygame
 import sys
 
@@ -673,8 +674,8 @@ if __name__ == "__main__":
     #              add_disturbance=None)
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_22", # Trained from v22; smooth driver
     #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5)
-    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
-    #              v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, collision_rejection=True)
+    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_fw", # Trained from v22; in four walls environment; smooth solver
+                  v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", trajectory_time = 10.0, include_collision_state=True)
     
     # GOOD STUFF: illustrates the strenghts of v40, while using v22 directly.
     #visualize_v40(sim_dt=0.05, decision_dt=0.25, save_folder="None", loadfolder="DDPG/checkpoints/v22_naples_nn", # Using v22_nn; in naples environment - GOOD
@@ -715,10 +716,10 @@ if __name__ == "__main__":
     
     #############################################
     # Adding disturbance => DELTA [tau_v, tau_alpha, k_max, k_min, c_max, d]
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
-                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
-                    add_noise=False, collision_stop=True, include_collision_state=False,
-                    goal_stop=True, add_disturbance=[-0.1, -0.1, -1, -1, 0.5, 1], trajectory_time=10.0)
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
+    #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+    #                add_noise=False, collision_stop=True, include_collision_state=False,
+    #                goal_stop=True, add_disturbance=[-0.1, -0.1, -1, -1, 0.5, 1], trajectory_time=10.0)
 
     #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v22", # just using v22
     #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
@@ -726,10 +727,10 @@ if __name__ == "__main__":
     #                goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
     
     ### TRAINED FOR disturbance6 ###
-    visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_v22_fw_dist", # just using v22
-                    v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
-                    add_noise=False, collision_stop=True, include_collision_state=False,
-                    goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
+    #visualize_v40(sim_dt=0.05, decision_dt=0.5, save_folder="DDPG/checkpoints/v40", loadfolder="DDPG/checkpoints/v40_v22_fw_dist", # just using v22
+    #                v_max=20, v_min=-4, alpha_max=0.5, tau_steering=0.5, tau_throttle=0.5, environment_selection="four_walls", user_controlled=False,
+    #                add_noise=False, collision_stop=True, include_collision_state=False,
+    #                goal_stop=True, add_disturbance=[-0.2, -0.2, -5, -5, 0.5, 2])
     
     pass
 
