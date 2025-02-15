@@ -3,3 +3,4 @@ extracted_data/
 .vscode
 DDPG/plotdata
 DDPG/rundata
+venv

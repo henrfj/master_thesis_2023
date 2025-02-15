@@ -8,8 +8,21 @@ Henrik Fjellheim, NTNU - IDI - NorwAI
 
 ## Getting started
 Activate venv, install requirements, then run:
+```
+python -m venv venv
 
-- (The project was made with python 3.8 64 bit version in 2023, but most packages can safely be upgraded to newer versions)
+-- Windows
+.\venv\Scripts\activate
+
+-- MAC / Linux
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+```
+
+
+- (The project was made with **python 3.8 64 bit** version in 2023, but most packages can safely be upgraded to newer versions)
     - (Example is the gym package, which has been replaced fully with gymnasium.)
 
 ```
@@ -21,6 +34,8 @@ IF you dont have CUDA enabled / don't have a NVIDIA graphics card, you need to g
 ```
 disable_cuda=True
 ```
+- If you still struggle with the cuda version (might be deprecated), run a fitting installation from: https://pytorch.org/get-started/locally/
+
 
 ## Details and description
 
